@@ -1,0 +1,24 @@
+---
+abstract: 'A simulation tool for reducing the genome with one DNA endonuclease or a pair DNA endonucleases!'
+author:
+  - 'Jinpeng Wang, Li Li, Haigang Qi, Xuedi Du, and Guofan Zhang <restrictiondigest@163.com>'
+build_requires:
+  Test::More: '0'
+configure_requires:
+  ExtUtils::MakeMaker: '0'
+dynamic_config: 1
+generated_by: 'ExtUtils::MakeMaker version 7.04, CPAN::Meta::Converter version 2.143240'
+license: unknown
+meta-spec:
+  url: http://module-build.sourceforge.net/META-spec-v1.4.html
+  version: '1.4'
+name: RestrictionDigest
+no_index:
+  directory:
+    - t
+    - inc
+requires:
+  File::Basename: '2.74'
+  IO::File: '1.14'
+  perl: '5.006'
+version: '0.01'
