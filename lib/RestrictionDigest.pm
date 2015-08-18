@@ -112,6 +112,9 @@ use vars qw(%fields %enzyme_list);
 
 # Make the endonuclease enzyme-container--a hash.
 %enzyme_list=(
+      AleI  =>  'CACNN|NNGTG',
+      AluI  =>  'AG|CT',
+      AsiSI =>  'GCGAT|CGC',
       EcoRI => 'G|AATTC',
       HinfI => 'G|ANTC',
       AluI => 'AG|CT',
@@ -152,6 +155,14 @@ use vars qw(%fields %enzyme_list);
       BsaAI => 'YAC|GTR',
       BsaJI => 'C|CNNGG',
       BsaWI => 'W|CCGGW',
+      BfaI  => 'C|TAG',
+      BglII => 'A|GATCT',
+      BlpI  => 'GC|TNAGC',
+      BmgBI => 'CAC|GTC',
+      BmtI  => 'GCTAG|C',
+      Bpu10I => 'CC|TNAGC',
+      BsaAI => 'YAC|GTR',
+      BsaBI => 'GATNN|NNATC',
 
 
 
@@ -197,6 +208,7 @@ sub add_ref {
   # Check the format of reference
   my $ref_fh=IO::File->new("$self->{ref}",'r');
   my $line_num=0;
+  print"Examing the format of the reference file...\t";
   while(<$ref_fh>){
     chomp;
     $line_num++;
@@ -210,7 +222,9 @@ sub add_ref {
         die"The sequences of reference contain some charactors other than AGTCNRYMKSWHBVD, please correct that!\n";
       }
     }
+    
   }
+  print"the format is good.\n";
   $ref_fh->close;
 }
 
@@ -899,7 +913,7 @@ sub double_digest {
           }
           elsif($later_enzyme=~/$before_enzyme/i){
                 $before_cut_coorr=$before_coorr+$later_enzyme_cut_loc-1;
-                $after_cut_coorr=$after_coorr+$later_enzyme_cut_loc-2;
+                $after_cut_coorr=$after_coorr+$front_enzyme_cut_loc-2;
                 $length_of_fragment=$after_cut_coorr-$before_cut_coorr+1;
                 $seq_selected=substr($scaffold_seq, $before_cut_coorr, $length_of_fragment);
           }
@@ -1075,7 +1089,7 @@ sub add_SNPs {
 
 =head2 count_SNPs_at_fragments
   
-    $digest->count_SNPs_at_fragments(-sequence_type=>'100SE',-sequence_end=>'front_enzyme');
+    $digest->count_SNPs_at_fragments();
         Count the expected SNPs appeared in the framgents.
 =cut
 
@@ -1477,37 +1491,33 @@ sub genome_structure_coverage_ratio {
 
   # Fetch the lengths of different parts of this scaffold from the GFF file.
       my $gff_fh=IO::File->new($gff,'r');
-      my %gff;
+      # Create two hashes to check if start or stop position exists.
+      my %gff; my %exon_check; my %gene_check;
       print "Scanning the GFF file...\t";
+
+      my($gff_gene_count,$gff_exon_count)=qw(0 0);
       while(<$gff_fh>){
         chomp;
-        
         unless($_=~/^#/){
           my @gff=split /\t/, $_;
           if(@gff == 9){
            my ($gff_scfd_name,$gff_type,$gff_start,$gff_stop)=@gff[0,2,3,4];
               if($gff_type=~/CDS|exon/){
                 $gff_type='exon';
-                if($gff{$gff_scfd_name}{$gff_type}){
-                  
-                  unless(grep {$gff_start == $_} @{$gff{$gff_scfd_name}{$gff_type}}){
-                    
-                  push @{$gff{$gff_scfd_name}{$gff_type}}, ($gff_start,$gff_stop); 
-                  }
-                }
-                else{
-                  push @{$gff{$gff_scfd_name}{$gff_type}},($gff_start,$gff_stop);
+                unless($exon_check{$gff_scfd_name}{start}{$gff_start}){
+                  $gff_exon_count++;
+                  $gff{$gff_scfd_name}{$gff_type}{$gff_exon_count}{start}=$gff_start;
+                  $gff{$gff_scfd_name}{$gff_type}{$gff_exon_count}{stop}=$gff_stop;
+                  $exon_check{$gff_scfd_name}{start}{$gff_start}=1;
                 }
               }
               elsif($gff_type=~/mRNA|gene/){
                 $gff_type='gene';
-                if($gff{$gff_scfd_name}{$gff_type}){
-                  unless(grep {$gff_start == $_} @{$gff{$gff_scfd_name}{$gff_type}}){
-                  push @{$gff{$gff_scfd_name}{$gff_type}},($gff_start,$gff_stop); 
-                  }
-                }
-                else{
-                  push @{$gff{$gff_scfd_name}{$gff_type}},($gff_start,$gff_stop);
+                unless($gene_check{$gff_scfd_name}{start}{$gff_start}){
+                  $gff_gene_count++;
+                  $gff{$gff_scfd_name}{$gff_type}{$gff_gene_count}{start}=$gff_start;
+                  $gff{$gff_scfd_name}{$gff_type}{$gff_gene_count}{stop}=$gff_stop;
+                  $gene_check{$gff_scfd_name}{start}{$gff_start}=1;
                 }
               }
           }
@@ -1550,36 +1560,25 @@ sub genome_structure_coverage_ratio {
       my ($exon_length,$intron_length,$gene_length,$intergenic_length)=qw(0 0 0 0);
       
       if($gff{$scfd_name}{gene}){
-        my @gene_tmp=@{$gff{$scfd_name}{gene}};
-        
-        if(@gene_tmp % 2){
-          print "gene tmp not correct\n";
-        }
-
-        while(@gene_tmp){
-          my $front=shift @gene_tmp;
-          my $behind=shift @gene_tmp;
+        for my $gene_order(keys %{$gff{$scfd_name}{gene}}){
+          my $front=$gff{$scfd_name}{gene}{$gene_order}{start};
+          my $behind=$gff{$scfd_name}{gene}{$gene_order}{stop};
           $gene_length+=$behind-$front+1;
         }
         $intergenic_length=$scaffold_length-$gene_length;
       }else{
         $intergenic_length=$scaffold_length;
       }
-        
+
       if($gff{$scfd_name}{exon}){
-        my @exon_tmp=@{$gff{$scfd_name}{exon}};
-
-          if(@exon_tmp % 2){
-          print "exon tmp not correct\n";
-        }
-
-        while(@exon_tmp){
-          my $front=shift @exon_tmp;
-          my $behind=shift @exon_tmp;
+        for my $exon_order(keys %{$gff{$scfd_name}{exon}}){
+          my $front=$gff{$scfd_name}{exon}{$exon_order}{start};
+          my $behind=$gff{$scfd_name}{exon}{$exon_order}{stop};
           $exon_length+=$behind-$front+1;
         }
         $intron_length=$gene_length-$exon_length;
       }
+
       $all_intergenic_length+=$intergenic_length;
       $all_gene_length+=$gene_length;
       $all_exon_length+=$exon_length;
@@ -1591,51 +1590,146 @@ sub genome_structure_coverage_ratio {
       my $intron_map_length=0;
       my $intergenic_map_length=0;      
 
-      # Extract fragments' locs for %all_locs;
-      if($all_locs{$scfd_name}){
-        my @tmp_locs=@{$all_locs{$scfd_name}};
-        while(@tmp_locs){
-          my $front=shift @tmp_locs;
-          my $behind=shift @tmp_locs;
-          for my $one($front..$behind){
-                  my $gene_map_count=0;
-                  my $exon_map_count=0;
-                  my $intron_map_count=0;
-                  
-                  if($gff{$scfd_name}{gene}){
-                    my @gene_tmp=@{$gff{$scfd_name}{gene}};
-                    while(@gene_tmp){
-                      my $front=shift @gene_tmp;
-                      my $behind=shift @gene_tmp;
-                      if($one>=$front && $one<=$behind){
-                        $gene_map_count++;
-                        $gene_map_length++;
-                        last;
-                      }
-                    }
-                  }
-                  
-                  if($gff{$scfd_name}{exon}){
-                    my @exon_tmp=@{$gff{$scfd_name}{exon}};
-                    while(@exon_tmp){
-                      my $front=shift @exon_tmp;
-                      my $behind=shift @exon_tmp;
-                      if($one>=$front && $one<=$behind){
-                        $exon_map_count++;
-                        $exon_map_length++;
-                        last;
-                      }
-                    }
-                  }
-
-                  if($gene_map_count==0){
-                    $intergenic_map_length++;
-                  }
-                  elsif($exon_map_count==0){
-                    $intron_map_length++;
-                  }
-                }
+      
+      if($gff{$scfd_name}{gene}){
+        # Sort orders of 'genes' according to the 'start' value;
+        my (@sorted_gene_orders,@unsorted_gene_orders,@sorted_exon_orders,@unsorted_exon_orders);
+        for my $gene_order(keys %{$gff{$scfd_name}{gene}}){
+          push @unsorted_gene_orders, $gene_order;
         }
+        for my $exon_order(keys %{$gff{$scfd_name}{exon}}){
+          push @unsorted_exon_orders, $exon_order;
+        }
+        @sorted_gene_orders =sort {$gff{$scfd_name}{gene}{$a}{start} <=> $gff{$scfd_name}{gene}{$b}{start} } @unsorted_gene_orders;
+        @sorted_exon_orders =sort {$gff{$scfd_name}{exon}{$a}{start} <=> $gff{$scfd_name}{exon}{$b}{start} } @unsorted_exon_orders;
+
+        # Extract fragments' locs for %all_locs;
+        my $scfd_loc_length=0;
+        if($all_locs{$scfd_name}){
+          my @tmp_locs=@{$all_locs{$scfd_name}};
+          while(@tmp_locs){
+            my $loc_front=shift @tmp_locs;
+            my $loc_behind=shift @tmp_locs;
+            # for my $one($front..$behind){
+            my $length_loc=$loc_behind-$loc_front+1;
+            $scfd_loc_length+=$length_loc;
+
+            while (@sorted_gene_orders){
+              my $gene_order=$sorted_gene_orders[0];
+              my $gff_front=$gff{$scfd_name}{gene}{$gene_order}{start};
+              my $gff_behind=$gff{$scfd_name}{gene}{$gene_order}{stop};
+              my $length_gff=$gff_behind-$gff_front+1;
+              if($length_gff == $length_loc){
+                if($gff_behind <= $loc_behind){
+                  shift @sorted_gene_orders; 
+                }
+                if($gff_front == $loc_front ){
+                   $gene_map_length+=$length_gff;
+                }elsif($loc_behind >= $gff_front && $gff_front > $loc_front ){
+                          $gene_map_length+=$loc_behind-$gff_front+1;
+                }elsif($gff_front < $loc_front  && $loc_front <= $gff_behind){
+                          $gene_map_length+=$gff_behind-$loc_front+1;
+                }
+                if($loc_behind< $gff_behind ){
+                  last;
+                }
+              }
+              elsif($length_gff < $length_loc){
+                if($gff_behind <= $loc_behind){
+                    shift @sorted_gene_orders;
+                }
+                if($gff_front==$loc_front || $gff_behind==$loc_behind){
+                    $gene_map_length+=$length_gff;
+                }elsif($gff_front< $loc_front && $loc_front<=$gff_behind ){
+                    $gene_map_length+=$gff_behind-$loc_behind+1;
+                }elsif($loc_front< $gff_front && $gff_front <=$loc_behind && $gff_behind > $loc_behind){
+                    $gene_map_length+=$loc_behind-$gff_front+1;
+                }elsif($loc_front<$gff_front && $gff_behind<$loc_behind){
+                    $gene_map_length+=$length_gff;
+                }
+                if($loc_behind< $gff_behind ){
+                  last;
+                }
+              }
+              elsif($length_gff>$length_loc){
+                if($gff_behind <= $loc_behind){
+                  shift @sorted_gene_orders;
+                }
+                if($gff_front==$loc_front || $gff_behind==$loc_behind){
+                    $gene_map_length+=$length_loc;
+                }elsif($loc_front<$gff_front && $gff_front<=$loc_behind){
+                    $gene_map_length+=$loc_behind-$gff_front+1;
+                }elsif($gff_front<$loc_front && $loc_front <=$gff_behind && $loc_behind> $gff_behind){
+                    $gene_map_length+=$gff_behind-$loc_front+1;
+                }elsif($loc_front>$gff_front && $loc_behind<$gff_behind){
+                    $gene_map_length+=$length_loc;
+                }
+                if($loc_behind< $gff_behind ){
+                  last;
+                }
+              }
+            }
+                  
+            
+            while (@sorted_exon_orders){
+              my $exon_order=$sorted_exon_orders[0];
+              my $gff_front=$gff{$scfd_name}{exon}{$exon_order}{start};
+              my $gff_behind=$gff{$scfd_name}{exon}{$exon_order}{stop};
+              my $length_gff=$gff_behind-$gff_front+1;      
+              if($length_gff == $length_loc){
+                if($gff_behind <= $loc_behind){
+                    shift @sorted_exon_orders;
+                }
+                if($gff_front == $loc_front ){
+                    $exon_map_length+=$length_gff;
+                }elsif($loc_behind >= $gff_front && $gff_front > $loc_front ){
+                    $exon_map_length+=$loc_behind-$gff_front+1;
+                }elsif($gff_front < $loc_front && $loc_front <= $gff_behind){
+                    $exon_map_length+=$gff_behind-$loc_front+1;
+                }
+                if($loc_behind< $gff_behind ){
+                  last;
+                }
+              }
+              elsif($length_gff < $length_loc){
+                if($gff_behind <= $loc_behind){
+                    shift @sorted_exon_orders;
+                }
+                if($gff_front==$loc_front || $gff_behind==$loc_behind){
+                    $exon_map_length+=$length_gff;
+                }elsif($gff_front< $loc_front && $loc_front <=$gff_behind ){
+                    $exon_map_length+=$gff_behind-$loc_behind+1;
+                }elsif($loc_front< $gff_front && $gff_front<=$loc_behind && $gff_behind > $loc_behind){
+                    $exon_map_length+=$loc_behind-$gff_front+1;
+                }elsif($loc_front<$gff_front && $gff_behind<$loc_behind){
+                    $exon_map_length+=$length_gff;
+                }
+                if($loc_behind< $gff_behind ){
+                  last;
+                }
+              }  
+              elsif($length_gff>$length_loc){
+                if($gff_behind <= $loc_behind){
+                    shift @sorted_exon_orders;
+                }
+                if($gff_front==$loc_front || $gff_behind==$loc_behind){
+                    $exon_map_length+=$length_loc;
+                }elsif($loc_front<$gff_front && $gff_front<=$loc_behind){
+                    $exon_map_length+=$loc_behind-$gff_front+1;
+                }elsif($gff_front<$loc_front && $loc_front <=$gff_behind && $loc_behind> $gff_behind){
+                    $exon_map_length+=$gff_behind-$loc_front+1;
+                }elsif($loc_front>$gff_front && $loc_behind<$gff_behind){
+                    $exon_map_length+=$length_loc;
+                }
+                if($loc_behind< $gff_behind ){
+                  last;
+                }
+              }                       
+            }
+          }
+        }
+        $intergenic_map_length=$scfd_loc_length-$gene_map_length;
+        $intron_map_length=$gene_map_length-$exon_map_length;
       }
 
     
@@ -1840,6 +1934,7 @@ sub add_ref {
   # Check the format of reference
   my $ref_fh=IO::File->new("$self->{ref}",'r');
   my $line_num=0;
+  print"Examing the format of the reference file...\t";
   while(<$ref_fh>){
     chomp;
     $line_num++;
@@ -1854,6 +1949,7 @@ sub add_ref {
       }
     }
   }
+  print"the format is OK.\n";
   $ref_fh->close;
 }
 
@@ -2497,7 +2593,7 @@ sub add_SNPs {
 
 =head2 count_SNPs_at_fragments
   
-    $digest->count_SNPs_at_fragments(-sequence_type=>'100PE');
+    $digest->count_SNPs_at_fragments();
         Count the expected SNPs appeared in the framgents.
 =cut
 
@@ -2798,7 +2894,8 @@ sub genome_structure_coverage_ratio {
   # Fetch the lengths of different parts of this scaffold from the GFF file.
       
       my $gff_fh=IO::File->new($gff,'r');
-      my %gff;
+      my %gff; my %exon_check; my %gene_check;
+      my ($gff_gene_count,$gff_exon_count)=qw(0 0);
       print "Scanning the GFF file...\t";
       while(<$gff_fh>){
         chomp;
@@ -2808,24 +2905,20 @@ sub genome_structure_coverage_ratio {
            my ($gff_scfd_name,$gff_type,$gff_start,$gff_stop)=@gff[0,2,3,4];
               if($gff_type=~/CDS|exon/){
                 $gff_type='exon';
-                if($gff{$gff_scfd_name}{$gff_type}){
-                  unless(grep {$gff_start == $_} @{$gff{$gff_scfd_name}{$gff_type}}){
-                  push @{$gff{$gff_scfd_name}{$gff_type}}, ($gff_start,$gff_stop); 
-                  }
-                }
-                else{
-                  push @{$gff{$gff_scfd_name}{$gff_type}},($gff_start,$gff_stop);
+                unless($exon_check{$gff_scfd_name}{start}{$gff_start}){
+                  $gff_exon_count++;
+                  $gff{$gff_scfd_name}{$gff_type}{$gff_exon_count}{start}=$gff_start;
+                  $gff{$gff_scfd_name}{$gff_type}{$gff_exon_count}{stop}=$gff_stop;
+                  $exon_check{$gff_scfd_name}{start}{$gff_start}=1;
                 }
               }
               elsif($gff_type=~/mRNA|gene/){
                 $gff_type='gene';
-                if($gff{$gff_scfd_name}{$gff_type}){
-                  unless(grep {$gff_start == $_} @{$gff{$gff_scfd_name}{$gff_type}}){
-                  push @{$gff{$gff_scfd_name}{$gff_type}},($gff_start,$gff_stop); 
-                  }
-                }
-                else{
-                  push @{$gff{$gff_scfd_name}{$gff_type}},($gff_start,$gff_stop);
+                unless($gene_check{$gff_scfd_name}{start}{$gff_start}){
+                  $gff_gene_count++;
+                  $gff{$gff_scfd_name}{$gff_type}{$gff_gene_count}{start}=$gff_start;
+                  $gff{$gff_scfd_name}{$gff_type}{$gff_gene_count}{stop}=$gff_stop;
+                  $gene_check{$gff_scfd_name}{start}{$gff_start}=1;
                 }
               }
           }
@@ -2869,10 +2962,9 @@ sub genome_structure_coverage_ratio {
       my ($exon_length,$intron_length,$gene_length,$intergenic_length)=qw(0 0 0 0);
       
       if($gff{$scfd_name}{gene}){
-        my @gene_tmp=@{$gff{$scfd_name}{gene}};
-        while(@gene_tmp){
-          my $front=shift @gene_tmp;
-          my $behind=shift @gene_tmp;
+        for my $gene_order(keys %{$gff{$scfd_name}{gene}}){
+          my $front=$gff{$scfd_name}{gene}{$gene_order}{start};
+          my $behind=$gff{$scfd_name}{gene}{$gene_order}{stop};
           $gene_length+=$behind-$front+1;
         }
         $intergenic_length=$scaffold_length-$gene_length;
@@ -2882,10 +2974,9 @@ sub genome_structure_coverage_ratio {
       }
         
       if($gff{$scfd_name}{exon}){
-        my @exon_tmp=@{$gff{$scfd_name}{exon}};
-        while(@exon_tmp){
-          my $front=shift @exon_tmp;
-          my $behind=shift @exon_tmp;
+        for my $exon_order(keys %{$gff{$scfd_name}{exon}}){
+          my $front=$gff{$scfd_name}{exon}{$exon_order}{start};
+          my $behind=$gff{$scfd_name}{exon}{$exon_order}{stop};
           $exon_length+=$behind-$front+1;
         }
         $intron_length=$gene_length-$exon_length;
@@ -2905,51 +2996,145 @@ sub genome_structure_coverage_ratio {
       my $intron_map_length=0;
       my $intergenic_map_length=0; 
 
-        # Extract fragments' locs for %all_locs;
-      if($all_locs{$scfd_name}){
-        my @tmp_locs=@{$all_locs{$scfd_name}};
-        while(@tmp_locs){
-          my $front=shift @tmp_locs;
-          my $behind=shift @tmp_locs;
-          for my $one($front..$behind){
-                  my $gene_map_count=0;
-                  my $exon_map_count=0;
-                  my $intron_map_count=0;
-                  
-                  if($gff{$scfd_name}{gene}){
-                    my @gene_tmp=@{$gff{$scfd_name}{gene}};
-                    while(@gene_tmp){
-                      my $front=shift @gene_tmp;
-                      my $behind=shift @gene_tmp;
-                      if($one>=$front && $one<=$behind){
-                        $gene_map_count++;
-                        $gene_map_length++;
-                        last;
-                      }
-                    }
-                  }
-                  
-                  if($gff{$scfd_name}{exon}){
-                    my @exon_tmp=@{$gff{$scfd_name}{exon}};
-                    while(@exon_tmp){
-                      my $front=shift @exon_tmp;
-                      my $behind=shift @exon_tmp;
-                      if($one>=$front && $one<=$behind){
-                        $exon_map_count++;
-                        $exon_map_length++;
-                        last;
-                      }
-                    }
-                  }
-
-                  if($gene_map_count==0){
-                    $intergenic_map_length++;
-                  }
-                  elsif($exon_map_count==0){
-                    $intron_map_length++;
-                  }
-                }
+      if($gff{$scfd_name}{gene}){
+        # Sort orders of 'genes' according to the 'start' value;
+        my (@sorted_gene_orders,@unsorted_gene_orders,@sorted_exon_orders,@unsorted_exon_orders);
+        for my $gene_order(keys %{$gff{$scfd_name}{gene}}){
+          push @unsorted_gene_orders, $gene_order;
         }
+        for my $exon_order(keys %{$gff{$scfd_name}{exon}}){
+          push @unsorted_exon_orders, $exon_order;
+        }
+        @sorted_gene_orders =sort {$gff{$scfd_name}{gene}{$a}{start} <=> $gff{$scfd_name}{gene}{$b}{start} } @unsorted_gene_orders;
+        @sorted_exon_orders =sort {$gff{$scfd_name}{exon}{$a}{start} <=> $gff{$scfd_name}{exon}{$b}{start} } @unsorted_exon_orders;
+
+
+        # Extract fragments' locs for %all_locs;
+        my $scfd_loc_length=0;
+
+        if($all_locs{$scfd_name}){
+          my @tmp_locs=@{$all_locs{$scfd_name}};
+          while(@tmp_locs){
+            my $loc_front=shift @tmp_locs;
+            my $loc_behind=shift @tmp_locs;
+            my $length_loc=$loc_behind-$loc_front+1;
+            $scfd_loc_length+=$length_loc;
+
+            while (@sorted_gene_orders){
+              my $gene_order=$sorted_gene_orders[0];
+              my $gff_front=$gff{$scfd_name}{gene}{$gene_order}{start};
+              my $gff_behind=$gff{$scfd_name}{gene}{$gene_order}{stop};
+              my $length_gff=$gff_behind-$gff_front+1;
+              if($length_gff == $length_loc){
+                if($gff_behind <= $loc_behind){
+                  shift @sorted_gene_orders; 
+                }
+                if($gff_front == $loc_front ){
+                   $gene_map_length+=$length_gff;
+                }elsif($loc_behind >= $gff_front && $gff_front > $loc_front ){
+                          $gene_map_length+=$loc_behind-$gff_front+1;
+                }elsif($gff_front < $loc_front  && $loc_front <= $gff_behind){
+                          $gene_map_length+=$gff_behind-$loc_front+1;
+                }
+                if($loc_behind< $gff_behind ){
+                  last;
+                }
+              }
+              elsif($length_gff < $length_loc){
+                if($gff_behind <= $loc_behind){
+                    shift @sorted_gene_orders;
+                }
+                if($gff_front==$loc_front || $gff_behind==$loc_behind){
+                    $gene_map_length+=$length_gff;
+                }elsif($gff_front< $loc_front && $loc_front<=$gff_behind ){
+                    $gene_map_length+=$gff_behind-$loc_behind+1;
+                }elsif($loc_front< $gff_front && $gff_front <=$loc_behind && $gff_behind > $loc_behind){
+                    $gene_map_length+=$loc_behind-$gff_front+1;
+                }elsif($loc_front<$gff_front && $gff_behind<$loc_behind){
+                    $gene_map_length+=$length_gff;
+                }
+                if($loc_behind< $gff_behind ){
+                  last;
+                }
+              }
+              elsif($length_gff>$length_loc){
+                if($gff_behind <= $loc_behind){
+                  shift @sorted_gene_orders;
+                }
+                if($gff_front==$loc_front || $gff_behind==$loc_behind){
+                    $gene_map_length+=$length_loc;
+                }elsif($loc_front<$gff_front && $gff_front<=$loc_behind){
+                    $gene_map_length+=$loc_behind-$gff_front+1;
+                }elsif($gff_front<$loc_front && $loc_front <=$gff_behind && $loc_behind> $gff_behind){
+                    $gene_map_length+=$gff_behind-$loc_front+1;
+                }elsif($loc_front>$gff_front && $loc_behind<$gff_behind){
+                    $gene_map_length+=$length_loc;
+                }
+                if($loc_behind< $gff_behind ){
+                  last;
+                }
+              }
+            }
+
+            while (@sorted_exon_orders){
+              my $exon_order=$sorted_exon_orders[0];
+              my $gff_front=$gff{$scfd_name}{exon}{$exon_order}{start};
+              my $gff_behind=$gff{$scfd_name}{exon}{$exon_order}{stop};
+              my $length_gff=$gff_behind-$gff_front+1;      
+              if($length_gff == $length_loc){
+                if($gff_behind <= $loc_behind){
+                    shift @sorted_exon_orders;
+                }
+                if($gff_front == $loc_front ){
+                    $exon_map_length+=$length_gff;
+                }elsif($loc_behind >= $gff_front && $gff_front > $loc_front ){
+                    $exon_map_length+=$loc_behind-$gff_front+1;
+                }elsif($gff_front < $loc_front && $loc_front <= $gff_behind){
+                    $exon_map_length+=$gff_behind-$loc_front+1;
+                }
+                if($loc_behind< $gff_behind ){
+                  last;
+                }
+              }
+              elsif($length_gff < $length_loc){
+                if($gff_behind <= $loc_behind){
+                    shift @sorted_exon_orders;
+                }
+                if($gff_front==$loc_front || $gff_behind==$loc_behind){
+                    $exon_map_length+=$length_gff;
+                }elsif($gff_front< $loc_front && $loc_front <=$gff_behind ){
+                    $exon_map_length+=$gff_behind-$loc_behind+1;
+                }elsif($loc_front< $gff_front && $gff_front<=$loc_behind && $gff_behind > $loc_behind){
+                    $exon_map_length+=$loc_behind-$gff_front+1;
+                }elsif($loc_front<$gff_front && $gff_behind<$loc_behind){
+                    $exon_map_length+=$length_gff;
+                }
+                if($loc_behind< $gff_behind ){
+                  last;
+                }
+              }  
+              elsif($length_gff>$length_loc){
+                if($gff_behind <= $loc_behind){
+                    shift @sorted_exon_orders;
+                }
+                if($gff_front==$loc_front || $gff_behind==$loc_behind){
+                    $exon_map_length+=$length_loc;
+                }elsif($loc_front<$gff_front && $gff_front<=$loc_behind){
+                    $exon_map_length+=$loc_behind-$gff_front+1;
+                }elsif($gff_front<$loc_front && $loc_front <=$gff_behind && $loc_behind> $gff_behind){
+                    $exon_map_length+=$gff_behind-$loc_front+1;
+                }elsif($loc_front>$gff_front && $loc_behind<$gff_behind){
+                    $exon_map_length+=$length_loc;
+                }
+                if($loc_behind< $gff_behind ){
+                  last;
+                }
+              }                       
+            }      
+          }
+        }
+        $intergenic_map_length=$scfd_loc_length-$gene_map_length;
+        $intron_map_length=$gene_map_length-$exon_map_length;
       }
 
       # Output part!!!
