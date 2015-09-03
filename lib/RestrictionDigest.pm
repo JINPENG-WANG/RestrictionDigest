@@ -95,7 +95,7 @@ use vars qw(%fields %enzyme_list);
 
 # Define the fields to be used as identifiers.
 %fields = (
-  ref			=> undef,
+  ref => undef,
   gff =>  undef,
   SNPs => undef,
   enzyme1 => undef,
