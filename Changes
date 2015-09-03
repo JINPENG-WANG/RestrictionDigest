@@ -3,3 +3,5 @@ Revision history for RestrictionDigest
 0.01    Date/time
         First version, released on an unsuspecting world.
 
+20150903        Fix a bug. To make it process standard FASTA file correctly. Standard FASTA file contains newline characters within
+                one sequence.
