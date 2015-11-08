@@ -2,31 +2,11 @@ RestrictionDigest
 
 DESCRIPTION
 
-RestrictionDigest is used for the simulation in silico of single-enzyme
-and double-enzyme GBS/RAD approach. GBS(Genotyping by sequencing) and 
-RAD (Restrict site associated  DNA markers) are two popular methods for
-reducing the complexity of the whole genome. As sequencing the whole 
-genome is expensive and sometimes unnecessary, sequencing the representative
-part of the whole genome becomes practicable and attractive. The most 
-important thing of representative sequencing is choosing the right enzyme(s)
-to digest the whole genome. The appropriate enzyme(s) should satisfy several
-criteria including: the recognition sites of the enzyme(s) are evenly 
-dispersed on each single chromsome;  the recognition sites of the  enzyme(s)
-are not or rarely located at the repetitive region of the genome; the 
-fragments produced by the enzyme(s) digestion are neither too long nor 
-too short, they should be in the suitable range which is most effective 
-for PCR amplification. 
-
-In order to evaluate the effect of particular enzyme(s) on the reference, 
-we developed this perl module. RestrictionDigest can simulate the digestions
-of the whole reference genomes and provide comprehensive profiles of these 
-digestions. RestrictionDigest generates essential information of restriciton 
-fragments; the essential information includes the number of restriction 
-fragments and the distribution of restriction fragments lengths. The essential
-information help researchers to determine whether the candidate enzyme(s)
-can be used to digest the genome DNA or not. Besides the essential information, 
-RestrictionDigest also provide supplenmentary information of restriciton 
-fragments by analysing the GFF file and the SNP coordinate file. 
+	RestrictionDigest can simulate the reference genome digestion and
+generate comprehensive information of the simulation. It can simulate single-enzyme
+digestion, double-enzyme digestion and size selection process. It can also analyze
+multiple genomes at one run and generates concise comparison of enzyme(s) performance
+across the genomes. 
 
 
 INSTALLATION
@@ -38,51 +18,150 @@ To install this module, run the following commands:
 	make test
 	make install
 
+
+
 METHODS
+
+	Class 
+
+	RestrictionDigest::SingleItem::Double
+
+	Functions
 
 	new
 	add_ref
 	add_enzyme_pair
-	add_singel_enzyme
 	new_enzyme
 	change_range
 	change_lengths_distribution_parameters
 	add_output_dir
 	double_digest
+	add_SNPs
+	count_SNPs_at_fragments
+	add_gff
+	all_frags_coverage_ratio
+	frags_in_range_covearge_ratio
+	
+	Script Example:
+
+	use RestrictionDigest;
+	my $double_digest=RestrictionDigest::SingleItem::Double->new();
+	$double_digest->add_ref(-reference =>’ path to the reference file’);
+	$double_digest->add_enzyme_pair(-front_enzyme =>’EcoRI’, -behind_enzyme =>’HinfI’);
+	$double_digest->change_range(-start =>301,-end =>500);
+	$double_digest->change_lengths_distribution_parameters(-front =>200,-behind =>800,-step =>25);
+	$double_digest->add_output_dir(-output_dir=>’ path to the output directory’);
+	$double_digest->double_digest();
+	$double_digest->add_SNPs(-SNPs =>’ path to the SNPs file’);
+	$double_digest->count_SNPs_at_fragments(-sequence_type =>’125SE’, -sequence_end =>’front_enzyme’);
+	$double_digest->add_gff(-gff =>’ path to the GFF file’);
+	$double_digest->frags_in_range_coverage_ratio();
+
+
+	Class
+
+	RestrictionDigest::SingleItem::Single
+
+	Functions
+
+	new
+	add_ref
+	add_single_enzyme
+	new_enzyme
+	change_range
+	change_lengths_distribution_parameters
+	add_output_dir
 	single_digest
 	add_SNPs
 	count_SNPs_at_fragments
 	add_gff
 	all_frags_coverage_ratio
-	frags_in_range_coverage_ratio
+	frags_in_range_covearge_ratio
 
+	Script Example:
+	use RestrictionDigest;
+	my $single_digest=RestrictionDigest::SingleItem::Single->new();
+	$single_digest->add_ref(-reference=>’path to the reference file’);
+	$single_digest->add_single_enzyme(-enzyme =>’EcoRI’);
+	$single_digest->change_range(-start =>301,-end =>500);
+	$single_digest->change_lengths_distribution_parameters(-front =>200,-behind =>800,-step =>25);
+	$single_digest->add_output_dir(-output_dir=>’path to the output directory’);
+	$single_digest->single_digest();
+	$single_digest->add_SNPs(-SNPs =>’ path to the SNPs file’);
+	$single_digest->count_SNPs_at_fragments(-sequence_type  =>’150SE’);
+	$single_digest->add_gff(-gff =>’ path to the GFF file’);
+	$single_digest->frags_in_range_coverage_ratio();
+
+
+
+
+	Class 
+
+	RestrictionDigest::MultipleItems::Double
+
+	Functions
+
+	new
+	add_refs
+	add_enzyme_pair
+	new_enzyme
+	change_lengths_distribution_parameters
+	add_output_dir
+	digests_and_compare
+ 
+	Script Example:
+
+	use RestrictionDigest;
+	my $multiple_double_digest=RestrictionDigest::MultipleItems::Double->new();
+	$multiple_double_digest->add_refs(-ref1 =>’path to reference 1 file’, -ref2 =>’path to reference 2 file’…);
+	$multiple_double_digest->add_enzyme_pair(-front_enzyme=>’EcoRI’, -behind_enzyme => ‘HinfI’);
+	$multiple_double_digest->change_lengths_distribution_parameters(-front => 200, -behind => 800, -step => 25);
+	$multiple_double_digest->add_output_dir (-output_dir => ‘path to the output directory’);
+	$multiple_double_digest->digests_and_compare();
+
+
+
+	Class
+
+	RestrictionDigest::MultipleItems::Single
+
+	Functions
+
+	new
+	add_refs
+	add_single_enzyme
+	new_enzyme
+	change_lengths_distribution_parameters
+	add_output_dir
+	digests_and_compare
+
+	Script Example:
+
+	use RestrictionDigest;
+	my $multiple_double_digest=RestrictionDigest::MultipleItems::Single->new();
+	$multiple_single_digest->add_refs(-ref1 =>’path to reference 1 file’, -ref2 =>’path to reference 2 file’…);
+	$multiple_single_digest->add_enzyme_pair(-front_enzyme=>’EcoRI’, -behind_enzyme => ‘HinfI’);
+	$multiple_single_digest->change_lengths_distribution_parameters(-front => 200, -behind => 800, -step => 25);
+	$multiple_single_digest->add_output_dir (-output_dir => ‘path to the output directory’);
+	$multiple_single_digest->digests_and_compare();
 
 
 FORMATS OF THE INPUT REFERENCE FILE, GFF FILE, AND THE SNP COORDINATES FILE
 
-1) RestrictionDigest is designed to process the reference file in the "fasta"
+1) RestrictionDigest is designed to process the reference file in the FASTA
 format. It should be in the following format:
 
 >ChromsomeName1
 ATCGATCGATCGATCGATCGATCGATCGATCG
+ATCGATCGATCGATCGATCGATCGATCGATCG
+ATCGATCGATCGATCGATCGATCGATCGATCG
+ATCGATCGATCGATCGATCGATCGATCGATCG
 >ChromsomeName2
 ATCGATCGATCGATCGATCGATCGATCGATCG
-The chromesome name should be unique. Any kinds of space chracters are 
-not allowed, like blank space, tab etc.
+ATCGATCGATCGATCGATCGATCGATCGATCG
+ATCGATCGATCGATCGATCGATCGATCGATCG
 
-In some cases, the reference file is in the following format:
->ChromsomeName1
-ATCGATCGATCGATCGATCGATCGATCGATCG
-ATCGATCGATCGATCGATCGATCGATCGATCG
-ATCGATCGATCGATCGATCGATCGATCGATCG
-ATCGATCGATCGATCGATCGATCGATCGATCG
->ChromsomeName2
-ATCGATCGATCGATCGATCGATCGATCGATCG
-ATCGATCGATCGATCGATCGATCGATCGATCG
-ATCGATCGATCGATCGATCGATCGATCGATCG
-.....
-Sorry, this format is not allowed. Please transform this format into the
-first format described above.
+
 
 2) For the "GFF" file, it should be in the standard GFF format, here is an example:
 
@@ -101,6 +180,7 @@ scaffold838	GLEAN	mRNA	36580	65627	.	-	.	ID=OYG_10003281_10026064;
 
 The gff file should contain 9 columns and these columns must be seperated by '\t'. 
 
+
 3) For the SNP coordinates file, it should contain 3 columns, here is an example:
 
 <chromosome name>	<coordinate>	<SNP type>
@@ -113,16 +193,18 @@ scaffold18356		97		M
 scaffold18356		114		M
 
 
-EXPLANATION OF RESULT FILES
+EXPLANATIONS OF RESULT FILES
 
-1. Files by double digest.
+1. Files produced by RestrictionDigest::SingleItem::Double.
 
 
-1) "position_frags(_in_range_)?_REFERENCE_by_ENZYME-FRONT_and_ENZYME-BEHIND". 
+1) "position_FB_BF_frags(_in_range_)?_REFERENCE_by_FRONT_ENZYME_and_BEHIND_ENZYME" 
+   "position_FF_frags(_in_range_)?_REFERENCE_by_FRONT_ENZYME_and_BEHIND_ENZYME"
+   "position_BB_frags(_in_range_)?_REFERENCE_by_FRONT_ENZYME_and_BEHIND_ENZYME"
 The positions of digested fragments(all fragments or fragments in range) 
-are saved in this file. There are 7 columns whose descriptions are as follows:
-'>Name of fragments', 'strand','enzyme-front/behind', 'start position', 
-'enzyme-front/behind', 'end position', 'length of fragment'.
+are saved in these file. There are 7 columns whose descriptions are as follows:
+'>Name of fragments', 'strand','FRONT_ENZYME/behind', 'start position', 
+'FRONT_ENZYME/behind', 'end position', 'length of fragment'.
     
     a) >Name of fragments.  The name of this fragment, the format consists 
     3 parts. The 1st part is '>'. The 2nd part is the name of scaffold in 
@@ -131,7 +213,7 @@ are saved in this file. There are 7 columns whose descriptions are as follows:
     
     b) strand. The location of this fragment in the reference sequence, + or -.
     
-    c) enzyme-front/behind. The corresponding enzyme of the overhang of front
+    c) FRONT_ENZYME/behind. The corresponding enzyme of the overhang of front
     end of this fragments. If the strand is "+" strand, the enzyme is behind 
     enzyme, else, the enzyme is front enzyme.
 
@@ -139,7 +221,7 @@ are saved in this file. There are 7 columns whose descriptions are as follows:
     scaffold. It is the start position of the     overhang, not the recognition
     base position. 
 
-    e) enzyme-front/behind. Like the item 'c', but the opposite one to it.
+    e) FRONT_ENZYME/behind. Like the item 'c', but the opposite one to it.
 
     f) end postion. The end position of this fragment on the specific scaffold.
     It is also the end position of the     overhang, not the recognition base
@@ -148,36 +230,31 @@ are saved in this file. There are 7 columns whose descriptions are as follows:
     g) length of fragment. The base length of this fragment.
 
 
-2) "seq_frags(in_range_)?_REFERENCE_by_ENZYME-FRONT_and_ENZYME-BEHIND". 
+2) "seq__FB_BF_frags(in_range_)?_REFERENCE_by_FRONT_ENZYME_and_BEHIND_ENZYME"
+   "seq_FF_frags(in_range_)?_REFERENCE_by_FRONT_ENZYME_and_BEHIND_ENZYME"
+   "seq_BB_frags(in_range_)?_REFERENCE_by_FRONT_ENZYME_and_BEHIND_ENZYME"
 The seqences of digested fragments(all fragments or fragments in range)
-and their names are saved in this file. There are many double-line. The
+and their names are saved in these files. There are many double-line. The
 first line of the double_line is the name of the fragment in the 
 ">chromsomeName-[0-9]+" format. The second line of the double_line is 
 the sequence of this fragment.
 
-3) "reduced_ratio_every_scaffold_REFERENCE_by_ENZYME-FRONT_and_ENZYME-BEHIND".
-The length ratio of fragments in every scaffold are saved in this file.
-There are three columns in this file. The first column contains the names 
-of scaffolds. And the second column contains the length ratio of all 
-fragments in this scaffold. And the third column contains the length 
-ratio of fragments in range in this scaffold.
+3) "coverage_ratio_every_chromosome_REFERENCE_by_ENZYME". 
+The coverage ratios of every chromosome covered by three kinds of fragments
+are saved in this file. 
+chromosome_name	all_type_overall_rate	all_type_in_range_rate	FB_BF_overall_rate	FB_BF_in_range_rate	FF_overall_rate	FF_in_range_rate	BB_overall_rate	BB_in_range_rate
 
-4) "digestion_summary_REFERENCE_by_ENZYME-FRONT_and_ENZYME-BEHIND". 
 
-	Number of all fragments	  
-	Number of fragments in range	
-	Ratio after reducing of all fragments
-	Ratio after reducing of fragments in range
+4) "digestion_summary_REFERENCE_by_FRONT_ENZYME_and_BEHIND_ENZYME". 
+
+	loci_number_of_FRONT_ENZYME	loci_number_of_BEHIND_ENZYME
 	
-	# The lengths' distribution of all fragments. There are three 
-	columnds in this part.
-	# The first column contains the refined scopes which are shaped
-	by three parameters: the front split point,
-	# the behind split point and the step size between the two points.
-	The default parameters are: 100, 1000 and
-	# 50 separately. These parameters can be changed via the method 
-	<change_lengths_distribution_parameters>.
-	Lengths' scope	Number of fragments in this scope Ratio of these fragments in all  
+	all_3types_fragments_number	all_3types_fragments_coverage	all_FB_BF_fragments_number	all_FB_BF_fragments_coverage	all_FF_fragments_number	all_FF_fragments_coverage
+
+	3types_fragments_in_range_number	3types_fragments_in_range_coverage	FB_BF_fragments_in_range_number	FB_BF_fragments_in_range_coverage	FF_fragments_in_range_number	FF_fragments_in_range_coverage	BB_fragments_in_range_number	BB_fragments_in_range_coverage
+
+	Length_range	three_types_number	three_types_ratio	FB_BF_number	FB_BF_ratio	FF_number	FF_ratio	BB_number	BB_ratio
+ 
 	0bp-200bp
 	201bp-250b
 	251bp-300bp
@@ -195,11 +272,16 @@ ratio of fragments in range in this scaffold.
 	851bp-900bp
 	901bp-950bp
 	951bp-1000bp
-	1001bp-bigger bp
+	1001bp-longer
 
+	Expected_SNPs_at_all_fragments_via_SEQUNCE_TYPE:	
+	Expected_SNPs_at_fragments_in_range_via_SEQUNCE_TYPE:
 
-
-5) "gene_coverage_ratio(_in_range)?_REFERENCE_by_ENZYME-FRONT_and_ENZYME-BEHIND". 
+5) "genome_coverage_by_FF_frags(_in_range)?_REFERENCE_by_FRONT_ENZYME_and_BEHIND_ENZYME"
+   "genome_coverage_by_FB_BF_frags(_in_range)?_REFERENCE_by_FRONT_ENZYME_and_BEHIND_ENZYME"
+   "genome_coverage_by_BB_frags(_in_range)?_REFERENCE_by_FRONT_ENZYME_and_BEHIND_ENZYME"
+The coverage ratios of different genomic structures of every chromosome covered
+by these three kinds of fragments(all fragments or fragments in range) are saved in these files.
 If User apply the 'all_frags_coverage_ratio' or the 
 'frags_in_range_coverage_ratio' method, this file will be produced. 
 There are 13 columns in this file. They are: 'IntergenicLength',
@@ -216,17 +298,8 @@ There are 13 columns in this file. They are: 'IntergenicLength',
     by all digested fragments or fragments in range of these parts. If some
     part does not exits, 0 is given.
 
-6) "SNPs_at_all_frags_REFERENCE_by_ENZYME-FRONT_and_ENZYME-BEHIND"
-This file is produced by the method 'count_SNPs_at_fragments'. It contains
-2 columns: the column of chromosomes and the column of coordinates. These
-SNPs are located at all restriciton fragments.
 
-7) "SNPs_at_frags_in_range_REFERENCE_by_ENZYME-FRONT_and_ENZYME-BEHIND"
-This file is produced by the method 'count_SNPs_at_fragments'. It contains
-2 columns: the column of chromosomes and the column of coordinates. These
-SNPs are located at restriction fragments in range.
-
-2. Files by single digest. 
+2. Files produced by RestrictionDigest::SingleItem::Single. 
 
 
 1) "position_frags(_in_range_)?_REFERENCE_by_ENZYME". The positions of
@@ -258,30 +331,21 @@ in this file. There are many double-line. The first line of the double_line
 is the name of the fragment in the ">chromsomeName-[0-9]+" format. The 
 second line of the double_line is the sequence of this fragment.
 
-3) "reduced_ratio_every_scaffold_REFERENCE_by_ENZYME". The length ratio 
+3) "coverage_ratio_every_chromosome_REFERENCE_by_ENZYME". The length ratio 
 of fragments in every scaffold are saved in this file. There are three 
 columns in this file. The first column contains the names of scaffolds. 
 And the second column contains the length ratio of all fragments in this
 scaffold. And the third column contains the length ratio of fragments in 
 range in this scaffold.
 
-4) "digestion_summary_REFERENCE_by_ENZYME-FRONT_and_ENZYME-BEHIND". 
+4) "digestion_summary_REFERENCE_by_FRONT_ENZYME_and_BEHIND_ENZYME". 
 
-	Number of all fragments	  
-	Number of fragments in range	
-	Ratio after reducing of all fragments	
-	Ratio after reducing of fragments in range	
+	loci_number_of_ENZYME 
+
+	all_fragments_number	all_fragments_coverage	fragments_in_range_number	fragments_in_range_coverage
 	
-	
-	# The lengths' distribution of all fragments. There are three 
-	columnds in this part.
-	# The first column contains the refined scopes which are shaped 
-	by three parameters: the front split point,
-	# the behind split point and the step size between the two points.
-	The default parameters are: 100, 1000 and
-	# 50 separately. These parameters can be changed via the 
-	method <change_lengths_distribution_parameters>.
-	Lengths' scope	Number of fragments in this scop Ratio of these fragments in all  
+	Length_range	fragments_number	fragments_ratio
+
 	0bp-200bp
 	201bp-250b
 	251bp-300bp
@@ -299,7 +363,12 @@ range in this scaffold.
 	851bp-900bp
 	901bp-950bp
 	951bp-1000bp
-	1001bp-bigger bp
+	1001bp-longer
+
+	Expected_SNPs_at_all_fragments_via_SEQUNCE_TYPE:	
+	Expected_SNPs_at_fragments_in_range_via_SEQUNCE_TYPE:	
+
+
 
 5) "genome_coverage_ratio(_in_range)?_REFERENCE_by_ENZYME". If User 
 apply the 'all_frags_coverage_ratio' or the 'frags_in_range_coverage_ratio'
@@ -319,15 +388,61 @@ There are 13 columns in this file. They are:
     of mapped part by all digested fragments or fragments in range of 
     these parts. If some part does not exits, 0 is given.
 
-6) "SNPs_at_all_frags_REFERENCE_by_ENZYME"
-This file is produced by the method 'count_SNPs_at_fragments'. It contains
-2 columns: the column of chromosomes and the column of coordinates. 
-These SNPs are located at all restriciton fragments.
+3. Files produced by RestrictionDigest::MultipleItems::Double.
 
-7) "SNPs_at_frags_in_range_REFERENCE_by_ENZYME"
-This file is produced by the method 'count_SNPs_at_fragments'. It 
-contains 2 columns: the column of chromosomes and the column of 
-coordinates. These SNPs are located at restriction fragments in range.
+1) "digestion_summary_multiple_genomes_by_FRONT_ENZYME_and_BEHIND_ENZYME"
+
+	Number_of_enzyme_loci	REFERENCE1	REFERENCE2	....
+	Loci_number_of_FRONT_ENZYME
+	Loci_number_of_BEHIND_ENZYME	
+	Length_range	three_types_number_REFERENCE1	three_types_ratio_REFERENCE1	FB_BF_number_REFERENCE1	FB_BF_ratio_REFERENCE1	FF_number_REFERENCE1	FF_ratio_REFERENCE1	BB_number_REFERENCE1	BB_ratio_REFERENCE1	three_types_number_REFERENCE2	three_types_ratio_REFERENCE2	FB_BF_number_REFERENCE2	FB_BF_ratio_REFERENCE2	FF_number_REFERENCE2	FF_ratio_REFERENCE2	BB_number_REFERENCE2	BB_ratio_REFERENCE2
+	0bp-200bp
+	201bp-250b
+	251bp-300bp
+	301bp-350bp
+	351bp-400bp
+	401bp-450bp
+	451bp-500bp
+	501bp-550bp
+	551bp-600bp
+	601bp-650bp
+	651bp-700bp
+	701bp-750bp
+	751bp-800bp
+	801bp-850bp
+	851bp-900bp
+	901bp-950bp
+	951bp-1000bp
+	1001bp-longer
+	
+
+4. Files produced by RestrictionDigest::MultipleItems::Single.
+
+1) "digestion_summary_multiple_genomes_by_ENZYME"
+	Number_of_enzyme_loci	REFERENCE1	REFERENCE2	....
+	Loci_number_of_ENZYME	
+	Length_range	fragments_number_REFERENCE1	fragments_ratio_REFERENCE1	fragments_number_REFERENCE2	fragments_ratio_REFERENCE2
+	0bp-200bp
+	201bp-250b
+	251bp-300bp
+	301bp-350bp
+	351bp-400bp
+	401bp-450bp
+	451bp-500bp
+	501bp-550bp
+	551bp-600bp
+	601bp-650bp
+	651bp-700bp
+	701bp-750bp
+	751bp-800bp
+	801bp-850bp
+	851bp-900bp
+	901bp-950bp
+	951bp-1000bp
+	1001bp-longer
+
+
+
 
 SUPPORT AND DOCUMENTATION
 
