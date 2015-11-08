@@ -9,7 +9,7 @@ use warnings FATAL => 'all';
 
 =head1 NAME
 
-RestrictionDigest - A simulation tool for reducing the genome with one DNA endonuclease or a pair DNA endonucleases!
+RestrictionDigest - A powerful Perl module for simulating genomic restriction digests!
 
 =head1 VERSION
 
@@ -21,23 +21,11 @@ our $VERSION = '0.01';
 
 =head1 DESCRIPTION
 
-
-Next Generation Sequencing (NGS) is developing quickly and many cost-saving approaches are developed based on NGS.  As sequencing 
-the whole genome is expensive and sometimes unnecessary, sequencing the representative part of the whole genome becomes practicable 
-and attractive. The most famous two approaches are Genotyping By Sequencing (GBS) and Restrict site Associated DNA sequencing (RAD).
-These two approaches can reduce the  ratio of sequenced part of the whole genome which will save a lot of money. Both of them 
-utilize tpye II DNA endonuclease to digest the whole genome. In order to select the correct enzyme or enzyme-pair, we developed 
-this perl module: RestrictionDigest.
-
-RestrictionDigest is used for the simulation of single/double-enzyme GBS/RAD approach. The most important thing of representative sequencing 
-is choosing the right enzymes to digest the whole genome. The appropriate enzymes should satisfy several criteria including: the 
-recognition sites of these two enzymes are evenly dispersed on each single chromsome;  the recognition sites of these two enzymes 
-are not or rarely located at the repetitive region of the genome; the fragments produced by two-enzyme digestion are neither too long 
-nor too short, they should be in the suitable range which is most  effective for PCR amplification; the complexity reducing rate 
-shoule be in the suitable range(1%-10%).  RestrictionDigest can produce several result files including the fragments seqence and their 
-locations on the reference. The ratio of these fragments on the reference seqences are also produced. If User can provide the gff 
-annotation file, RestrictionDigest can also provide the coverage ratio of these fragments on gene region, even CDS, INTRON, UTR region, 
-and intergenic region.
+Restriction site Associated DNA sequence (RAD), Genotyping by Sequencing (GBS) and their variations are popular methods
+in reduced-representation sequencing. A key factor of these methods is to determine the enzyme or enzyme-combination to
+use. Prior to practical experiments, simulating the digestions is useful. RestrictionDigest can simulate these digestions
+and generate useful information of the evaluation which would help users to determine the usability of the enzyme evaluated
+in reduced-representation library construction.
 
 =cut
 
@@ -45,14 +33,15 @@ and intergenic region.
 
 
 
-package RestrictionDigest::Double;
+package RestrictionDigest::SingleItem::Double;
 
 use 5.8.0;
 use strict;
 use warnings FATAL => 'all';
+
 =head1 NAME
 
-RestrictionDigest::Double - for double-enzyme simulation.
+RestrictionDigest::SingleItem::Double
 
 =head1 VERSION
 
@@ -66,12 +55,12 @@ our $VERSION = '0.01';
 
 =head1 SYNOPSIS
 
-RestrictionDigest::Double is used for the simulation of double-enzyme GBS/RAD approach. 
+RestrictionDigest::SingleItem::Double is used for the simulation of double-enzyme digestion of one reference genome. 
 
 
     use RestrictionDigest;
 
-    $digest = RestrictionDigest::Double->new();
+    $digest = RestrictionDigest::SingleItem::Double->new();
     
     $digest->add_ref(-reference=>'Full path of the reference file');
 
@@ -81,9 +70,19 @@ RestrictionDigest::Double is used for the simulation of double-enzyme GBS/RAD ap
 
     $digest->add_output_dir(-output_dir=>'Full path of the output directory');
 
+    $digest->change_range(-start => 301, -end => 500);
+
+    $digest->change_lengths_distribution_parameters(-front => 200, -behind => 800, -step => 25);
+
     $digest->double_digest();
 
+    $digest->add_SNPs(-SNPs => 'full path to the SNPs coordinate file');
 
+    $digest->count_SNPs_at_fragments(-sequence_type=>'125SE', -sequence_end=>'front_enzyme');
+
+    $digest->add_GFF(-gff=>'full path to the GFF file');
+
+    $digest->frags_in_range_coverage_ratio();
 
 
 =cut
@@ -161,7 +160,7 @@ use vars qw(%fields %enzyme_list);
 
 =head2 new
      
-     $digest=RestrictionDigest::Double->new(); 
+     $digest=RestrictionDigest::SingleItem::Double->new(); 
           Create a new object.
 
 =cut
@@ -178,7 +177,7 @@ sub new {
 =head2 add_ref
      
      $digest->add_ref(-reference=>'Full path of the reference file');
-          Add the reference file  to the RestrictionDigest variable. 
+          Add the reference file to the object. 
           
 =cut
 
@@ -190,7 +189,8 @@ sub add_ref {
       $self->{ref}=$parameters{$_};
     }
     else{
-    die "Unacceptable parameters in the method <add_ref>, please perldoc RestrictionDigest for example or read README for more help!\n";
+    die "Unacceptable parameters in the method <add_ref>, please perldoc RestrictionDigest for example or read
+    README for more help!\n";
     }
   }
 }
@@ -198,8 +198,7 @@ sub add_ref {
 =head2 add_enzyme_pair
      
      $digest->add_enzyme_pair(-front_enzyme=>'EcoRI', -behind_enzyme=>'HinfI');
-          Add  two enzymes to the RestrictionDigest variable. 
-          The names of the two enzymes are case-insensitive.
+          Add two enzymes to the object. The names of the two enzymes are case-insensitive.
 
 =cut
 
@@ -217,7 +216,8 @@ sub add_enzyme_pair {
       $self->{enzyme2}=$parameters{$_};
     }
     else{
-      die"Unacceptable parameters in the method <add_enzyme_pair>, please perldoc RestrictionDigest for example or read README for more help!\n";
+      die"Unacceptable parameters in the method <add_enzyme_pair>, please perldoc RestrictionDigest for example
+      or read README for more help!\n";
     }
   } 
 
@@ -234,12 +234,14 @@ sub add_enzyme_pair {
   if($enzyme1_exists >0 ){
     
   }else{
-    die "The front restrict endonuclease  User provides does not exist.\nHowever User can add this enzyme and its recognition sites to enzyme-container via the method 'new_enzyme' .\n";
+    die "The front restrict endonuclease  User provides does not exist.\nHowever User can add this enzyme and 
+    ts recognition sites to enzyme-container via the method 'new_enzyme' .\n";
   }
   if($enzyme2_exists >0 ){
     
   }else{
-    die "The behind restrict endonuclease  User provides does not exist.\nHowever User can add this enzyme and its recognition sites to enzyme-container via the method 'new_enzyme' .\n";
+    die "The behind restrict endonuclease  User provides does not exist.\nHowever User can add this enzyme and
+    its recognition sites to enzyme-container via the method 'new_enzyme' .\n";
   }
 }
 
@@ -247,13 +249,8 @@ sub add_enzyme_pair {
 
      $digest->new_enzyme(-enzyme_name=>'EcoRI', -recognition_site=>'G|AATTC');
      
-     If the enzyme User wants to use does not exists in the default enzyme-pool, the enzyme can be added to the enzyme-pool.
-     
-     For now, the enzymes in the default enzyme pool are  as follows:
-           EcoRI,HinfI,AluI,AvaII,BamHI,HindIII,MseI,MspI,NdeI,PstI,SalI,XbaI,XhoI,NlaIII.
-     
-     Adding new enzyme(s) to the enzyme-pool is easy but the enzyme added to the pool is temporary. The added enzyme(s) is active
-     only in the class context to which the 'new_method' belongs.
+     If the enzyme User wants to use does not exists in the enzyme resevior of the module, the enzyme can be added
+     temporarily to the enzyme resevior.
 
 =cut 
 
@@ -269,11 +266,13 @@ sub new_enzyme {
     elsif($_=~/^-recognition_site$/){
       $new_enzyme_site=$parameters{$_};
       unless($new_enzyme_site=~/|/){
-        die "The 'recognition_site' must contain a cut flag '|'. Please perldoc RestrictionDigest for example or read README for moer help\n";
+        die "The 'recognition_site' must contain a cut flag '|'. Please perldoc RestrictionDigest for example
+        or read README for moer help\n";
       }
     }
     else{
-      die"Unacceptable parameters in the method <new_enzyme>, please perldoc RestrictionDigest for example or read README for more help\n";
+      die"Unacceptable parameters in the method <new_enzyme>, please perldoc RestrictionDigest for example or
+      read README for more help\n";
     }
   }
   $enzyme_list{$new_enzyme_name}=$new_enzyme_site;
@@ -282,10 +281,9 @@ sub new_enzyme {
 
 =head2 change_range
 
-     $digest->change_range(-start=>201, -end=>500);
-          Usually, not all fragments are needed by the scientists. The fragments in particular range are more attractive to them.
-          RestrictionDigest provides the sequences and the positions on the reference of these fragments in range. The default range is 
-           [201bp, 500]. User can change this range via the method <change_range>. 
+      $digest->change_range(-start=>201, -end=>500);
+       This function is used to change the length range corresponding to size selection process. The default range is from
+       201 bp to 500 bp.
 
 
 =cut
@@ -301,7 +299,8 @@ sub change_range {
       $self->{range_end}=$parameters{$_};
     }
     else{
-      die"Unacceptable parameters in the method <change_range>,please perldoc RestrictionDigest for example or read README for more help.\n";
+      die"Unacceptable parameters in the method <change_range>,please perldoc RestrictionDigest for example or
+      read README for more help.\n";
     }
   }
   if($self->{range_start} < $self->{range_end} ) {
@@ -314,10 +313,8 @@ sub change_range {
 =head2 change_lengths_distribution_parameters
     
      $digest->change_lengths_distribution_parameters(-front=>100,-behind=>1000,-step=>50);
-        This program will give a simple summary of the lengths of all fragments after digestion. By default, three scopes, which are  
-         <=100bp, 101bp-1000bp and >1000bp, are given. The number of the fragments whose length fallen in these scopes are given. More 
-         fine sorted, the 101bp-1000bp scope is split by the step of 50bp. These three parameters: the front edge and the behind edge 
-         of the scope and the step can be changed via the method 'change_lengths_distribution_parameters';
+      This function is used to change the resolution of fragments lengths distribution. This function has three
+      parameters: front and behind define the two boundary length values, and step defines the step length.
 =cut
 
 sub change_lengths_distribution_parameters {
@@ -343,8 +340,7 @@ sub change_lengths_distribution_parameters {
 =head2 add_output_dir
     
      $digest->add_output_dir(-output_dir=>'Full path of the output directory');
-          Adds the directory into which the result files are put by the program. 
-          The directory must be in the absolute path format. 
+      Adds the directory into which the result files are put by the program.
 
 =cut
 
@@ -357,7 +353,8 @@ sub add_output_dir {
       $self->{output_dir}=$parameters{$_};
     }
     else{
-      die "Unacceptable parameter in the method <add_output_dir>, please perldoc RestrictionDigest for example or read README for more help!\n";
+      die "Unacceptable parameter in the method <add_output_dir>, please perldoc RestrictionDigest for
+      example or read README for more help!\n";
     }
   }
   if(-d $self->{output_dir} ) {
@@ -369,12 +366,8 @@ sub add_output_dir {
 =head2 double_digest
 
      $digest->double_digest();
-          Execute the digestion process. 
-          This process will produce several result files which will be located in the output directory 
-          added through the add_output_dir method. 
-          This process will take some time. It depends on the size of the reference file.
-          During the process, Prompting messages will be output to the STDOUT 
-          like "Digestion: >ScaffoldName is done!".
+      Execute the digestion process. This process will produce several result files which will be 
+      ocated in the output directory.
 
 =cut
 
@@ -421,11 +414,23 @@ sub double_digest {
   my $name_reference=basename($ref);
   
   # Make the file handles of result files.
-  my $all_seq_file_fh=IO::File->new(">>$output_dir/seq_frags_${name_reference}_by_${front_enzyme}_and_${later_enzyme}");
-  my $all_loc_file_fh=IO::File->new(">>$output_dir/position_frags_${name_reference}_by_${front_enzyme}_and_${later_enzyme}");
-  my $seq_in_range_file_fh=IO::File->new(">>$output_dir/seq_frags_in_range_${name_reference}_by_${front_enzyme}_and_${later_enzyme}");
-  my $loc_in_range_file_fh=IO::File->new(">>$output_dir/position_frags_in_range_${name_reference}_by_${front_enzyme}_and_${later_enzyme}");
-  my $reduced_ratio_every_scaffold_file_fh=IO::File->new(">>$output_dir/reduced_ratio_every_scaffold_${name_reference}_by_${front_enzyme}_and_${later_enzyme}");
+  my $all_FB_BF_seq_file_fh=IO::File->new(">>$output_dir/seq_FB_BF_frags_${name_reference}_by_${front_enzyme}_and_${later_enzyme}");
+  my $all_FF_seq_file_fh=IO::File->new(">>$output_dir/seq_FF_frags_${name_reference}_by_${front_enzyme}_and_${later_enzyme}");
+  my $all_BB_seq_file_fh=IO::File->new(">>$output_dir/seq_BB_frags_${name_reference}_by_${front_enzyme}_and_${later_enzyme}");
+  my $all_FB_BF_loc_file_fh=IO::File->new(">>$output_dir/position_FB_BF_frags_${name_reference}_by_${front_enzyme}_and_${later_enzyme}");
+  my $all_FF_loc_file_fh=IO::File->new(">>$output_dir/position_FF_frags_${name_reference}_by_${front_enzyme}_and_${later_enzyme}");
+  my $all_BB_loc_file_fh=IO::File->new(">>$output_dir/position_BB_frags_${name_reference}_by_${front_enzyme}_and_${later_enzyme}");
+  my $seq_FB_BF_in_range_file_fh=IO::File->new(">>$output_dir/seq_FB_BF_frags_in_range_${name_reference}_by_${front_enzyme}_and_${later_enzyme}");
+  my $seq_FF_in_range_file_fh=IO::File->new(">>$output_dir/seq_FF_frags_in_range_${name_reference}_by_${front_enzyme}_and_${later_enzyme}");
+  my $seq_BB_in_range_file_fh=IO::File->new(">>$output_dir/seq_BB_frags_in_range_${name_reference}_by_${front_enzyme}_and_${later_enzyme}");
+  my $loc_FB_BF_in_range_file_fh=IO::File->new(">>$output_dir/position_FB_BF_frags_in_range_${name_reference}_by_${front_enzyme}_and_${later_enzyme}");
+  my $loc_FF_in_range_file_fh=IO::File->new(">>$output_dir/position_FF_frags_in_range_${name_reference}_by_${front_enzyme}_and_${later_enzyme}");
+  my $loc_BB_in_range_file_fh=IO::File->new(">>$output_dir/position_BB_frags_in_range_${name_reference}_by_${front_enzyme}_and_${later_enzyme}");
+
+  
+  my $reduced_ratio_every_chromosome_file_fh=IO::File->new(">>$output_dir/coverage_ratio_every_chromosome_${name_reference}_by_${front_enzyme}_and_${later_enzyme}");
+  $reduced_ratio_every_chromosome_file_fh->print("chromosome_name\tall_type_overall_rate\tall_type_in_range_rate\t");
+  $reduced_ratio_every_chromosome_file_fh->print("FB_BF_overall_rate\tFB_BF_in_range_rate\tFF_overall_rate\tFF_in_range_rate\tBB_overall_rate\tBB_in_range_rate\n");
   my $summary_digestion_fh=IO::File->new(">>$output_dir/digestion_summary_${name_reference}_by_${front_enzyme}_and_${later_enzyme}");
   
   # Get the base-compositions of these two enzymes which User inputs.
@@ -509,11 +514,29 @@ sub double_digest {
   my $rate_overall=0;
   my $rate_in_range=0;
   my @lengths_of_fragments=();
+  my @lengths_of_FB_BF_fragments=();
+  my @lengths_of_FF_fragments=();
+  my @lengths_of_BB_fragments=();
+
   my @lengths_fragments_in_range=();
+  my @lengths_FB_BF_fragments_in_range=();
+  my @lengths_FF_fragments_in_range=();
+  my @lengths_BB_fragments_in_range=();
+
   my $overall_fragments_length=0;
+  my $overall_FB_BF_fragments_length=0;
+  my $overall_FF_fragments_length=0;
+  my $overall_BB_fragments_length=0;
+
   my $overall_fragments_in_range_length=0;
+  my $overall_FB_BF_fragments_in_range_length=0;
+  my $overall_FF_fragments_in_range_length=0;
+  my $overall_BB_fragments_in_range_length=0;
+
   my $overall_length_of_scfd=0;
 
+  my $total_front_enzyme_loci=0;
+  my $total_later_enzyme_loci=0;
   ########## CIRCLES START HERE!###########
 
   # Process one scaffold one circle;
@@ -530,7 +553,7 @@ sub double_digest {
         $scaffold_name=$seq_name_tmp;
         $scaffold_seq=$seq_tmp;
         print"Digesting $scaffold_name...\t";
-        $reduced_ratio_every_scaffold_file_fh->print("$scaffold_name\t");
+        $reduced_ratio_every_chromosome_file_fh->print("$scaffold_name\t");
         my $length_of_scafd=length $scaffold_seq;
         
         # Set the arrays which contain cut locations of front enzyme and later enzyme;
@@ -819,10 +842,11 @@ sub double_digest {
               }
             }
           }
-
         
-    
-     
+        # Count all enzymes loci of the genome.
+        $total_front_enzyme_loci+=@front_enzyme_locs;
+        $total_later_enzyme_loci+=@later_enzyme_locs;
+
         # Integrate the front enzyme locs and later enzyme locs into a hash;
         my %hash;
         while(@front_enzyme_locs){
@@ -837,91 +861,163 @@ sub double_digest {
         
         # Sort the locs by the locations of them and restore the fragments' locs with different ends.
         my @locs_sorted=sort{$a<=>$b} keys %hash;
-        my @locs_wanted_before;
-        my @enzyme_wanted_before;
-        my @locs_wanted_after;
-        my @enzyme_wanted_after;
+
+        # Three types of fragments: FB_BF, FF, BB (F for Front_enzyme and B for Behind_enzyme)
+        my ($length_FB_BF_fragments,$length_FF_fragments,$length_BB_fragments,$length_FB_BF_fragments_in_range)=qw(0 0 0 0);
+        my ($length_FF_fragments_in_range, $length_BB_fragments_in_range)=qw(0 0);
+        my ($count_all,$count_in_range,$count_FB_BF,$count_FF,$count_BB,$count_FB_BF_in_range,$count_FF_in_range,$count_BB_in_range)=qw(0 0 0 0 0 0 0 0);
+        my ($before_cut_coorr,$after_cut_coorr,$bf_ct_crr_hm_rd,$af_ct_crr_hm_rd);
+
+        my (@FB_BF_locs_before, @FB_BF_enzyme_before, @FB_BF_locs_after, @FB_BF_enzyme_after);
+        my (@FF_locs_before,  @FF_locs_after,@BB_locs_before, @BB_locs_after);
         my ($after_loc,$enzyme_before, $enzyme_after);
         my $before_loc=shift @locs_sorted;
+
         while(@locs_sorted){
           $after_loc=shift @locs_sorted;
           $enzyme_before=$hash{$before_loc};
           $enzyme_after=$hash{$after_loc};
           unless($enzyme_before eq $enzyme_after){
-            push @locs_wanted_before, $before_loc;
-            push @enzyme_wanted_before, $enzyme_before;
-            push @locs_wanted_after,$after_loc;
-            push @enzyme_wanted_after, $enzyme_after;
+            push @FB_BF_locs_before, $before_loc;
+            push @FB_BF_enzyme_before, $enzyme_before;
+            push @FB_BF_locs_after,$after_loc;
+            push @FB_BF_enzyme_after, $enzyme_after;
+            my $length_of_FB_BF_fragment=0; my $seq_FB_BF;
+            $count_all++; $count_FB_BF++;
+            if($front_enzyme=~/$enzyme_before/i){
+              $before_cut_coorr=$before_loc+$front_enzyme_cut_loc-1;
+              $after_cut_coorr=$after_loc+$later_enzyme_cut_loc-2;
+              $length_of_FB_BF_fragment=$after_cut_coorr-$before_cut_coorr+1;
+              $seq_FB_BF=substr($scaffold_seq, $before_cut_coorr, $length_of_FB_BF_fragment);   
+            }
+            elsif($later_enzyme=~/$enzyme_before/i){
+                $before_cut_coorr=$before_loc+$later_enzyme_cut_loc-1;
+                $after_cut_coorr=$after_loc+$front_enzyme_cut_loc-2;
+                $length_of_FB_BF_fragment=$after_cut_coorr-$before_cut_coorr+1;
+                $seq_FB_BF=substr($scaffold_seq, $before_cut_coorr, $length_of_FB_BF_fragment);
+            }
+
+            my $bf_ct_crr=$before_cut_coorr+1; my $af_ct_crr=$after_cut_coorr+1;
+
+            # Output the sequence and fragment positions of all_length_FB_BF fragments to files;
+            $all_FB_BF_seq_file_fh->print("$scaffold_name-$count_all\n$seq_FB_BF\n");
+            my $strand;
+            if($enzyme_before=~/$front_enzyme/i){$strand="+";}
+            elsif($enzyme_before=~/$later_enzyme/i){$strand="-";}
+            $all_FB_BF_loc_file_fh->print("$scaffold_name-$count_all\t$strand\t$enzyme_before\t$bf_ct_crr\t$enzyme_after\t$af_ct_crr\t$length_of_FB_BF_fragment\n");
+            push @lengths_of_fragments, $length_of_FB_BF_fragment;
+            push @lengths_of_FB_BF_fragments, $length_of_FB_BF_fragment; 
+
+            # Process fragments in range. 
+            if($length_of_FB_BF_fragment >= $range1 && $length_of_FB_BF_fragment <= $range2){
+              $count_in_range++;
+              $count_FB_BF_in_range++;
+              $seq_FB_BF_in_range_file_fh->print("$scaffold_name-$count_all\n$seq_FB_BF\n");
+              $loc_FB_BF_in_range_file_fh->print("$scaffold_name-$count_all\t$strand\t$enzyme_before\t$bf_ct_crr\t$enzyme_after\t$af_ct_crr\t$length_of_FB_BF_fragment\n");
+              push @lengths_fragments_in_range, $length_of_FB_BF_fragment;
+              push @lengths_FB_BF_fragments_in_range, $length_of_FB_BF_fragment;
+        
+              $length_FB_BF_fragments_in_range+=$length_of_FB_BF_fragment;              
+            }
+
+            # Sum all fragments length no matter in range or not!!!
+            
+            $length_FB_BF_fragments+=$length_of_FB_BF_fragment;
+          }elsif($enzyme_before eq $front_enzyme){
+            push @FF_locs_before, $before_loc;
+            push @FF_locs_after, $after_loc;
+            my $length_of_FF_fragment=0; my $seq_FF;
+            $count_all++; $count_FF++;
+            $before_cut_coorr=$before_loc+$front_enzyme_cut_loc-1;
+            $after_cut_coorr=$after_loc+$front_enzyme_cut_loc-2;
+            $length_of_FF_fragment=$after_cut_coorr-$before_cut_coorr+1;
+            $seq_FF=substr($scaffold_seq, $before_cut_coorr, $length_of_FF_fragment);
+            my $bf_ct_crr=$before_cut_coorr+1; my $af_ct_crr=$after_cut_coorr+1;
+            # Output the sequence and fragment positions of all_length_FF fragments to files;
+            $all_FF_seq_file_fh->print("$scaffold_name-$count_all\n$seq_FF\n");
+            my $strand="+";
+            $all_FF_loc_file_fh->print("$scaffold_name-$count_all\t$strand\t$front_enzyme\t$bf_ct_crr\t$front_enzyme\t$af_ct_crr\t$length_of_FF_fragment\n");
+            push @lengths_of_fragments, $length_of_FF_fragment;
+            push @lengths_of_FF_fragments, $length_of_FF_fragment;
+
+            # Process fragments in range.
+            if($length_of_FF_fragment >= $range1 && $length_of_FF_fragment <= $range2){
+              $count_in_range++;
+              $count_FF_in_range++;
+              $seq_FF_in_range_file_fh->print("$scaffold_name-$count_all\n$seq_FF\n");
+              $loc_FF_in_range_file_fh->print("$scaffold_name-$count_all\t$strand\t$front_enzyme\t$bf_ct_crr\t$front_enzyme\t$af_ct_crr\t$length_of_FF_fragment\n");
+              push @lengths_fragments_in_range, $length_of_FF_fragment;
+              push @lengths_FF_fragments_in_range, $length_of_FF_fragment;
+             
+              $length_FF_fragments_in_range+=$length_of_FF_fragment;              
+            }
+            # Sum all fragments length no matter in range or not!!!
+            
+            $length_FF_fragments+=$length_of_FF_fragment;
+
+          }elsif($enzyme_before eq $later_enzyme){
+            push @BB_locs_before, $before_loc;
+            push @BB_locs_after, $after_loc;
+            my $length_of_BB_fragment=0; my $seq_BB;
+            $count_all++; $count_BB++;
+            $before_cut_coorr=$before_loc+$later_enzyme_cut_loc-1;
+            $after_cut_coorr=$after_loc+$later_enzyme_cut_loc-2;
+            $length_of_BB_fragment=$after_cut_coorr-$before_cut_coorr+1;
+            $seq_BB=substr($scaffold_seq, $before_cut_coorr, $length_of_BB_fragment);
+            my $bf_ct_crr=$before_cut_coorr+1; my $af_ct_crr=$after_cut_coorr+1;
+            # Output the sequence and fragment positions of all_length_FF fragments to files;
+            $all_BB_seq_file_fh->print("$scaffold_name-$count_all\n$seq_BB\n");
+            my $strand="+";
+            $all_BB_loc_file_fh->print("$scaffold_name-$count_all\t$strand\t$later_enzyme\t$bf_ct_crr\t$later_enzyme\t$af_ct_crr\t$length_of_BB_fragment\n");
+            push @lengths_of_fragments, $length_of_BB_fragment;
+            push @lengths_of_BB_fragments, $length_of_BB_fragment;
+
+            # Process fragments in range.
+            if($length_of_BB_fragment >= $range1 && $length_of_BB_fragment <= $range2){
+              $count_in_range++;
+              $count_BB_in_range++;
+              $seq_BB_in_range_file_fh->print("$scaffold_name-$count_all\n$seq_BB\n");
+              $loc_BB_in_range_file_fh->print("$scaffold_name-$count_all\t$strand\t$later_enzyme\t$bf_ct_crr\t$later_enzyme\t$af_ct_crr\t$length_of_BB_fragment\n");
+              push @lengths_fragments_in_range, $length_of_BB_fragment;
+              push @lengths_BB_fragments_in_range, $length_of_BB_fragment;
+              
+              $length_BB_fragments_in_range+=$length_of_BB_fragment;              
+            }
+            # Sum all fragments length no matter in range or not!!!
+          
+            $length_BB_fragments+=$length_of_BB_fragment;
+
           }
           $before_loc=$after_loc;
         }
 
-        
-        # Define the scalars which contains the length of fragments;
-        my $nums_of_fragments=@locs_wanted_before;
-        my @pairs_of_locs=(0..$nums_of_fragments-1);
-        my $length_of_fragments=0;
-        my $length_of_fragments_in_range=0;
-        my $count_all=0;
-        my $count_in_range=0;
-        my ($before_cut_coorr,$after_cut_coorr,$bf_ct_crr_hm_rd,$af_ct_crr_hm_rd);
+        # Calculate reduced rate of three types of fragments on this chromosome.
+        my $all_type_length_overall=$length_FB_BF_fragments+$length_FF_fragments+$length_BB_fragments;
+        my $all_type_length_in_range=$length_FB_BF_fragments_in_range+$length_FF_fragments_in_range+$length_BB_fragments_in_range;
+        my $all_type_overall_rate=$all_type_length_overall/$length_of_scafd;
+        my $all_type_in_range_rate=$all_type_length_in_range/$length_of_scafd;
+        my $FB_BF_overall_rate=$length_FB_BF_fragments/$length_of_scafd;
+        my $FB_BF_in_range_rate=$length_FB_BF_fragments_in_range/$length_of_scafd;
+        my $FF_overall_rate=$length_FF_fragments/$length_of_scafd;
+        my $FF_in_range_rate=$length_FF_fragments_in_range/$length_of_scafd;
+        my $BB_overall_rate=$length_BB_fragments/$length_of_scafd;
+        my $BB_in_range_rate=$length_BB_fragments_in_range/$length_of_scafd;
 
-   
-        
-
-        while(@locs_wanted_before){
-        my  $before_coorr=shift @locs_wanted_before;
-        my $before_enzyme=shift @enzyme_wanted_before;
-        my  $after_coorr=shift @locs_wanted_after;
-        my  $after_enzyme=shift @enzyme_wanted_after;
-        my $length_of_fragment;my $seq_selected;
-          $count_all++;
-          if($front_enzyme=~/$before_enzyme/i){
-            $before_cut_coorr=$before_coorr+$front_enzyme_cut_loc-1;
-            $after_cut_coorr=$after_coorr+$later_enzyme_cut_loc-2;
-            $length_of_fragment=$after_cut_coorr-$before_cut_coorr+1;
-            $seq_selected=substr($scaffold_seq, $before_cut_coorr, $length_of_fragment);     
-          }
-          elsif($later_enzyme=~/$before_enzyme/i){
-                $before_cut_coorr=$before_coorr+$later_enzyme_cut_loc-1;
-                $after_cut_coorr=$after_coorr+$front_enzyme_cut_loc-2;
-                $length_of_fragment=$after_cut_coorr-$before_cut_coorr+1;
-                $seq_selected=substr($scaffold_seq, $before_cut_coorr, $length_of_fragment);
-          }
-         my $bf_ct_crr=$before_cut_coorr+1;
-         my $af_ct_crr=$after_cut_coorr+1;
-              
-              # Output the sequence and fragment positions of all-fragments to files;
-              $all_seq_file_fh->print("$scaffold_name-$count_all\n$seq_selected\n");
-              my $strand;
-              if($before_enzyme=~/$front_enzyme/i){$strand="+";}
-              elsif($before_enzyme=~/$later_enzyme/i){$strand="-";}
-              $all_loc_file_fh->print("$scaffold_name-$count_all\t$strand\t$before_enzyme\t$bf_ct_crr\t$after_enzyme\t$af_ct_crr\t$length_of_fragment\n");
-              push @lengths_of_fragments, $length_of_fragment;
-                        
-              # We treat the fragments in range in the same way of all fragments as above;
-              if($length_of_fragment>=$range1){
-                if($length_of_fragment<=$range2){
-                  $count_in_range++;
-                  $seq_in_range_file_fh->print("$scaffold_name-$count_all\n$seq_selected\n");
-                  $loc_in_range_file_fh->print("$scaffold_name-$count_all\t$strand\t$before_enzyme\t$bf_ct_crr\t$after_enzyme\t$af_ct_crr\t$length_of_fragment\n");
-                  push @lengths_fragments_in_range,$length_of_fragment;
-                  $length_of_fragments_in_range+=$length_of_fragment;
-                }
-              }
-              
-              # Count all fragments length no matter in range or not!
-              $length_of_fragments+=$length_of_fragment;
-
-
-        }
-        my $reduced_rate=$length_of_fragments/$length_of_scafd;
-        my $fragment_in_range_rate_scafd=$length_of_fragments_in_range/$length_of_scafd;
-        $overall_fragments_length+=$length_of_fragments;
-        $overall_fragments_in_range_length+=$length_of_fragments_in_range;
+        $overall_fragments_length+=$all_type_length_overall;
+        $overall_fragments_in_range_length+=$all_type_length_in_range;
         $overall_length_of_scfd+=$length_of_scafd;
-        $reduced_ratio_every_scaffold_file_fh->print("$reduced_rate\t$fragment_in_range_rate_scafd\n");
-        print"Done!\n"; 
+
+        $overall_FB_BF_fragments_length+=$length_FB_BF_fragments;
+        $overall_FF_fragments_length+=$length_FF_fragments;
+        $overall_BB_fragments_length+=$length_BB_fragments;
+
+        $overall_FB_BF_fragments_in_range_length+=$length_FB_BF_fragments_in_range;
+        $overall_FF_fragments_in_range_length+=$length_FF_fragments_in_range;
+        $overall_BB_fragments_in_range_length+=$length_BB_fragments_in_range;
+
+        $reduced_ratio_every_chromosome_file_fh->print("$all_type_overall_rate\t$all_type_in_range_rate\t$FB_BF_overall_rate\t$FB_BF_in_range_rate\t");
+        $reduced_ratio_every_chromosome_file_fh->print("$FF_overall_rate\t$FF_in_range_rate\t$BB_overall_rate\t$BB_in_range_rate\n");
+        print"Done!\n";
       }
       $seq_name_tmp=$seq_name;
       $seq_tmp="";
@@ -932,7 +1028,7 @@ sub double_digest {
       $scaffold_name=$seq_name_tmp;
       $scaffold_seq=$seq_tmp;
         print"Digesting $scaffold_name...\t";
-        $reduced_ratio_every_scaffold_file_fh->print("$scaffold_name\t");
+        $reduced_ratio_every_chromosome_file_fh->print("$scaffold_name\t");
         my $length_of_scafd=length $scaffold_seq;
         
         # Set the arrays which contain cut locations of front enzyme and later enzyme;
@@ -1222,7 +1318,9 @@ sub double_digest {
             }
           }
 
-        
+        # Count all enzymes loci of the genome.
+        $total_front_enzyme_loci+=@front_enzyme_locs;
+        $total_later_enzyme_loci+=@later_enzyme_locs;
     
      
         # Integrate the front enzyme locs and later enzyme locs into a hash;
@@ -1239,113 +1337,211 @@ sub double_digest {
         
         # Sort the locs by the locations of them and restore the fragments' locs with different ends.
         my @locs_sorted=sort{$a<=>$b} keys %hash;
-        my @locs_wanted_before;
-        my @enzyme_wanted_before;
-        my @locs_wanted_after;
-        my @enzyme_wanted_after;
+        
+
+        # Three types of fragments: FB_BF, FF, BB (F for Front_enzyme and B for Behind_enzyme)
+        my ($length_FB_BF_fragments,$length_FF_fragments,$length_BB_fragments,$length_FB_BF_fragments_in_range)=qw(0 0 0 0);
+        my ($length_FF_fragments_in_range, $length_BB_fragments_in_range)=qw(0 0);
+        my ($count_all,$count_in_range,$count_FB_BF,$count_FF,$count_BB,$count_FB_BF_in_range,$count_FF_in_range,$count_BB_in_range)=qw(0 0 0 0 0 0 0 0);
+        my ($before_cut_coorr,$after_cut_coorr,$bf_ct_crr_hm_rd,$af_ct_crr_hm_rd);
+
+        my (@FB_BF_locs_before, @FB_BF_enzyme_before, @FB_BF_locs_after, @FB_BF_enzyme_after);
+        my (@FF_locs_before,  @FF_locs_after,@BB_locs_before, @BB_locs_after);
         my ($after_loc,$enzyme_before, $enzyme_after);
         my $before_loc=shift @locs_sorted;
+
         while(@locs_sorted){
           $after_loc=shift @locs_sorted;
           $enzyme_before=$hash{$before_loc};
           $enzyme_after=$hash{$after_loc};
           unless($enzyme_before eq $enzyme_after){
-            push @locs_wanted_before, $before_loc;
-            push @enzyme_wanted_before, $enzyme_before;
-            push @locs_wanted_after,$after_loc;
-            push @enzyme_wanted_after, $enzyme_after;
+            push @FB_BF_locs_before, $before_loc;
+            push @FB_BF_enzyme_before, $enzyme_before;
+            push @FB_BF_locs_after,$after_loc;
+            push @FB_BF_enzyme_after, $enzyme_after;
+            my $length_of_FB_BF_fragment=0; my $seq_FB_BF;
+            $count_all++; $count_FB_BF++;
+            if($front_enzyme=~/$enzyme_before/i){
+              $before_cut_coorr=$before_loc+$front_enzyme_cut_loc-1;
+              $after_cut_coorr=$after_loc+$later_enzyme_cut_loc-2;
+              $length_of_FB_BF_fragment=$after_cut_coorr-$before_cut_coorr+1;
+              $seq_FB_BF=substr($scaffold_seq, $before_cut_coorr, $length_of_FB_BF_fragment);   
+            }
+            elsif($later_enzyme=~/$enzyme_before/i){
+                $before_cut_coorr=$before_loc+$later_enzyme_cut_loc-1;
+                $after_cut_coorr=$after_loc+$front_enzyme_cut_loc-2;
+                $length_of_FB_BF_fragment=$after_cut_coorr-$before_cut_coorr+1;
+                $seq_FB_BF=substr($scaffold_seq, $before_cut_coorr, $length_of_FB_BF_fragment);
+            }
+
+            my $bf_ct_crr=$before_cut_coorr+1; my $af_ct_crr=$after_cut_coorr+1;
+
+            # Output the sequence and fragment positions of all_length_FB_BF fragments to files;
+            $all_FB_BF_seq_file_fh->print("$scaffold_name-$count_all\n$seq_FB_BF\n");
+            my $strand;
+            if($enzyme_before=~/$front_enzyme/i){$strand="+";}
+            elsif($enzyme_before=~/$later_enzyme/i){$strand="-";}
+            $all_FB_BF_loc_file_fh->print("$scaffold_name-$count_all\t$strand\t$enzyme_before\t$bf_ct_crr\t$enzyme_after\t$af_ct_crr\t$length_of_FB_BF_fragment\n");
+            push @lengths_of_fragments, $length_of_FB_BF_fragment;
+            push @lengths_of_FB_BF_fragments, $length_of_FB_BF_fragment; 
+
+            # Process fragments in range. 
+            if($length_of_FB_BF_fragment >= $range1 && $length_of_FB_BF_fragment <= $range2){
+              $count_in_range++;
+              $count_FB_BF_in_range++;
+              $seq_FB_BF_in_range_file_fh->print("$scaffold_name-$count_all\n$seq_FB_BF\n");
+              $loc_FB_BF_in_range_file_fh->print("$scaffold_name-$count_all\t$strand\t$enzyme_before\t$bf_ct_crr\t$enzyme_after\t$af_ct_crr\t$length_of_FB_BF_fragment\n");
+              push @lengths_fragments_in_range, $length_of_FB_BF_fragment;
+              push @lengths_FB_BF_fragments_in_range, $length_of_FB_BF_fragment;
+              
+              $length_FB_BF_fragments_in_range+=$length_of_FB_BF_fragment;              
+            }
+
+            # Sum all fragments length no matter in range or not!!!
+            
+            $length_FB_BF_fragments+=$length_of_FB_BF_fragment;
+          }elsif($enzyme_before eq $front_enzyme){
+            push @FF_locs_before, $before_loc;
+            push @FF_locs_after, $after_loc;
+            my $length_of_FF_fragment=0; my $seq_FF;
+            $count_all++; $count_FF++;
+            $before_cut_coorr=$before_loc+$front_enzyme_cut_loc-1;
+            $after_cut_coorr=$after_loc+$front_enzyme_cut_loc-2;
+            $length_of_FF_fragment=$after_cut_coorr-$before_cut_coorr+1;
+            $seq_FF=substr($scaffold_seq, $before_cut_coorr, $length_of_FF_fragment);
+            my $bf_ct_crr=$before_cut_coorr+1; my $af_ct_crr=$after_cut_coorr+1;
+            # Output the sequence and fragment positions of all_length_FF fragments to files;
+            $all_FF_seq_file_fh->print("$scaffold_name-$count_all\n$seq_FF\n");
+            my $strand="+";
+            $all_FF_loc_file_fh->print("$scaffold_name-$count_all\t$strand\t$front_enzyme\t$bf_ct_crr\t$front_enzyme\t$af_ct_crr\t$length_of_FF_fragment\n");
+            push @lengths_of_fragments, $length_of_FF_fragment;
+            push @lengths_of_FF_fragments, $length_of_FF_fragment;
+
+            # Process fragments in range.
+            if($length_of_FF_fragment >= $range1 && $length_of_FF_fragment <= $range2){
+              $count_in_range++;
+              $count_FF_in_range++;
+              $seq_FF_in_range_file_fh->print("$scaffold_name-$count_all\n$seq_FF\n");
+              $loc_FF_in_range_file_fh->print("$scaffold_name-$count_all\t$strand\t$front_enzyme\t$bf_ct_crr\t$front_enzyme\t$af_ct_crr\t$length_of_FF_fragment\n");
+              push @lengths_fragments_in_range, $length_of_FF_fragment;
+              push @lengths_FF_fragments_in_range, $length_of_FF_fragment;
+           
+              $length_FF_fragments_in_range+=$length_of_FF_fragment;              
+            }
+            # Sum all fragments length no matter in range or not!!!
+            
+            $length_FF_fragments+=$length_of_FF_fragment;
+
+          }elsif($enzyme_before eq $later_enzyme){
+            push @BB_locs_before, $before_loc;
+            push @BB_locs_after, $after_loc;
+            my $length_of_BB_fragment=0; my $seq_BB;
+            $count_all++; $count_BB++;
+            $before_cut_coorr=$before_loc+$later_enzyme_cut_loc-1;
+            $after_cut_coorr=$after_loc+$later_enzyme_cut_loc-2;
+            $length_of_BB_fragment=$after_cut_coorr-$before_cut_coorr+1;
+            $seq_BB=substr($scaffold_seq, $before_cut_coorr, $length_of_BB_fragment);
+            my $bf_ct_crr=$before_cut_coorr+1; my $af_ct_crr=$after_cut_coorr+1;
+            # Output the sequence and fragment positions of all_length_FF fragments to files;
+            $all_BB_seq_file_fh->print("$scaffold_name-$count_all\n$seq_BB\n");
+            my $strand="+";
+            $all_BB_loc_file_fh->print("$scaffold_name-$count_all\t$strand\t$later_enzyme\t$bf_ct_crr\t$later_enzyme\t$af_ct_crr\t$length_of_BB_fragment\n");
+            push @lengths_of_fragments, $length_of_BB_fragment;
+            push @lengths_of_BB_fragments, $length_of_BB_fragment;
+
+            # Process fragments in range.
+            if($length_of_BB_fragment >= $range1 && $length_of_BB_fragment <= $range2){
+              $count_in_range++;
+              $count_BB_in_range++;
+              $seq_BB_in_range_file_fh->print("$scaffold_name-$count_all\n$seq_BB\n");
+              $loc_BB_in_range_file_fh->print("$scaffold_name-$count_all\t$strand\t$later_enzyme\t$bf_ct_crr\t$later_enzyme\t$af_ct_crr\t$length_of_BB_fragment\n");
+              push @lengths_fragments_in_range, $length_of_BB_fragment;
+              push @lengths_BB_fragments_in_range, $length_of_BB_fragment;
+             
+              $length_BB_fragments_in_range+=$length_of_BB_fragment;              
+            }
+            # Sum all fragments length no matter in range or not!!!
+           
+            $length_BB_fragments+=$length_of_BB_fragment;
+
           }
           $before_loc=$after_loc;
         }
 
-        
-        # Define the scalars which contains the length of fragments;
-        my $nums_of_fragments=@locs_wanted_before;
-        my @pairs_of_locs=(0..$nums_of_fragments-1);
-        my $length_of_fragments=0;
-        my $length_of_fragments_in_range=0;
-        my $count_all=0;
-        my $count_in_range=0;
-        my ($before_cut_coorr,$after_cut_coorr,$bf_ct_crr_hm_rd,$af_ct_crr_hm_rd);
+        # Calculate reduced rate of three types of fragments on this chromosome.
+        my $all_type_length_overall=$length_FB_BF_fragments+$length_FF_fragments+$length_BB_fragments;
+        my $all_type_length_in_range=$length_FB_BF_fragments_in_range+$length_FF_fragments_in_range+$length_BB_fragments_in_range;
+        my $all_type_overall_rate=$all_type_length_overall/$length_of_scafd;
+        my $all_type_in_range_rate=$all_type_length_in_range/$length_of_scafd;
+        my $FB_BF_overall_rate=$length_FB_BF_fragments/$length_of_scafd;
+        my $FB_BF_in_range_rate=$length_FB_BF_fragments_in_range/$length_of_scafd;
+        my $FF_overall_rate=$length_FF_fragments/$length_of_scafd;
+        my $FF_in_range_rate=$length_FF_fragments_in_range/$length_of_scafd;
+        my $BB_overall_rate=$length_BB_fragments/$length_of_scafd;
+        my $BB_in_range_rate=$length_BB_fragments_in_range/$length_of_scafd;
 
-   
-        
-
-        while(@locs_wanted_before){
-        my  $before_coorr=shift @locs_wanted_before;
-        my $before_enzyme=shift @enzyme_wanted_before;
-        my  $after_coorr=shift @locs_wanted_after;
-        my  $after_enzyme=shift @enzyme_wanted_after;
-        my $length_of_fragment;my $seq_selected;
-          $count_all++;
-          if($front_enzyme=~/$before_enzyme/i){
-            $before_cut_coorr=$before_coorr+$front_enzyme_cut_loc-1;
-            $after_cut_coorr=$after_coorr+$later_enzyme_cut_loc-2;
-            $length_of_fragment=$after_cut_coorr-$before_cut_coorr+1;
-            $seq_selected=substr($scaffold_seq, $before_cut_coorr, $length_of_fragment);     
-          }
-          elsif($later_enzyme=~/$before_enzyme/i){
-                $before_cut_coorr=$before_coorr+$later_enzyme_cut_loc-1;
-                $after_cut_coorr=$after_coorr+$front_enzyme_cut_loc-2;
-                $length_of_fragment=$after_cut_coorr-$before_cut_coorr+1;
-                $seq_selected=substr($scaffold_seq, $before_cut_coorr, $length_of_fragment);
-          }
-         my $bf_ct_crr=$before_cut_coorr+1;
-         my $af_ct_crr=$after_cut_coorr+1;
-              
-              # Output the sequence and fragment positions of all-fragments to files;
-              $all_seq_file_fh->print("$scaffold_name-$count_all\n$seq_selected\n");
-              my $strand;
-              if($before_enzyme=~/$front_enzyme/i){$strand="+";}
-              elsif($before_enzyme=~/$later_enzyme/i){$strand="-";}
-              $all_loc_file_fh->print("$scaffold_name-$count_all\t$strand\t$before_enzyme\t$bf_ct_crr\t$after_enzyme\t$af_ct_crr\t$length_of_fragment\n");
-              push @lengths_of_fragments, $length_of_fragment;
-                        
-              # We treat the fragments in range in the same way of all fragments as above;
-              if($length_of_fragment>=$range1){
-                if($length_of_fragment<=$range2){
-                  $count_in_range++;
-                  $seq_in_range_file_fh->print("$scaffold_name-$count_all\n$seq_selected\n");
-                  $loc_in_range_file_fh->print("$scaffold_name-$count_all\t$strand\t$before_enzyme\t$bf_ct_crr\t$after_enzyme\t$af_ct_crr\t$length_of_fragment\n");
-                  push @lengths_fragments_in_range,$length_of_fragment;
-                  $length_of_fragments_in_range+=$length_of_fragment;
-                }
-              }
-              
-              # Count all fragments length no matter in range or not!
-              $length_of_fragments+=$length_of_fragment;
-
-
-        }
-        my $reduced_rate=$length_of_fragments/$length_of_scafd;
-        my $fragment_in_range_rate_scafd=$length_of_fragments_in_range/$length_of_scafd;
-        $overall_fragments_length+=$length_of_fragments;
-        $overall_fragments_in_range_length+=$length_of_fragments_in_range;
+        $overall_fragments_length+=$all_type_length_overall;
+        $overall_fragments_in_range_length+=$all_type_length_in_range;
         $overall_length_of_scfd+=$length_of_scafd;
-        $reduced_ratio_every_scaffold_file_fh->print("$reduced_rate\t$fragment_in_range_rate_scafd\n");
-        print"Done!\n"; 
+
+        $overall_FB_BF_fragments_length+=$length_FB_BF_fragments;
+        $overall_FF_fragments_length+=$length_FF_fragments;
+        $overall_BB_fragments_length+=$length_BB_fragments;
+
+        $overall_FB_BF_fragments_in_range_length+=$length_FB_BF_fragments_in_range;
+        $overall_FF_fragments_in_range_length+=$length_FF_fragments_in_range;
+        $overall_BB_fragments_in_range_length+=$length_BB_fragments_in_range;
+
+        $reduced_ratio_every_chromosome_file_fh->print("$all_type_overall_rate\t$all_type_in_range_rate\t$FB_BF_overall_rate\t$FB_BF_in_range_rate\t");
+        $reduced_ratio_every_chromosome_file_fh->print("$FF_overall_rate\t$FF_in_range_rate\t$BB_overall_rate\t$BB_in_range_rate\n");
+        print"Done!\n";
     }
   }
 
   #Summary the whole reference genome.
-  my $length_ratio_all_frags=$overall_fragments_length/$overall_length_of_scfd;
-  my $length_ratio_frags_in_range=$overall_fragments_in_range_length/$overall_length_of_scfd;
-  my $num_all_frags=@lengths_of_fragments;
-  my $num_frags_in_range=@lengths_fragments_in_range;
-  my $lengths_fragments_in_range=\@lengths_fragments_in_range;
-  
+  my $overall_all_type_coverage=$overall_fragments_length/$overall_length_of_scfd;
+  my $all_type_in_range_coverage=$overall_fragments_in_range_length/$overall_length_of_scfd;
+  my $overall_FB_BF_coverage=$overall_FB_BF_fragments_length/$overall_length_of_scfd;
+  my $FB_BF_in_range_coverage=$overall_FB_BF_fragments_in_range_length/$overall_length_of_scfd;
+  my $overall_FF_coverage=$overall_FF_fragments_length/$overall_length_of_scfd;
+  my $FF_in_range_coverage=$overall_FF_fragments_in_range_length/$overall_length_of_scfd;
+  my $overall_BB_coverage=$overall_BB_fragments_length/$overall_length_of_scfd;
+  my $BB_in_range_coverage=$overall_BB_fragments_in_range_length/$overall_length_of_scfd;
 
+  my $count_all=@lengths_of_fragments;
+  my $count_FB_BF=@lengths_of_FB_BF_fragments;
+  my $count_FF=@lengths_of_FF_fragments;
+  my $count_BB=@lengths_of_BB_fragments;
+  my $count_in_range=@lengths_fragments_in_range;
+  my $count_FB_BF_in_range=@lengths_FB_BF_fragments_in_range;
+  my $count_FF_in_range=@lengths_FF_fragments_in_range;
+  my $count_BB_in_range=@lengths_BB_fragments_in_range;
+
+  $summary_digestion_fh->print("loci_number_of_$front_enzyme\tloci_number_of_$later_enzyme\n");
+  $summary_digestion_fh->print("$total_front_enzyme_loci\t$total_later_enzyme_loci\n");
   # Output the summary of digestion.
-  $summary_digestion_fh->print("Expected all fragments:\t$num_all_frags\n");
-  $summary_digestion_fh->print("Expected fragments in range:\t$num_frags_in_range\n");
-  $summary_digestion_fh->print("Expected reducing ratio of all fragments:\t$length_ratio_all_frags\n");
-  $summary_digestion_fh->print("Expected reducing ratio of fragments in range:\t$length_ratio_frags_in_range\n");
+  $summary_digestion_fh->print("all_3types_fragments_number\tall_3types_fragments_coverage\tall_FB_BF_fragments_number\t");
+  $summary_digestion_fh->print("all_FB_BF_fragments_coverage\tall_FF_fragments_number\tall_FF_fragments_coverage\t");
+  $summary_digestion_fh->print("all_BB_fragments_number\tall_BB_fragments_coverage\n");
+
+  $summary_digestion_fh->print("$count_all\t$overall_all_type_coverage\t$count_FB_BF\t$overall_FB_BF_coverage\t");
+  $summary_digestion_fh->print("$count_FF\t$overall_FF_coverage\t$count_BB\t$overall_BB_coverage\n");
+
+
+  $summary_digestion_fh->print("3types_fragments_in_range_number\t3types_fragments_in_range_coverage\t");
+  $summary_digestion_fh->print("FB_BF_fragments_in_range_number\tFB_BF_fragments_in_range_coverage\t");
+  $summary_digestion_fh->print("FF_fragments_in_range_number\tFF_fragments_in_range_coverage\t");
+  $summary_digestion_fh->print("BB_fragments_in_range_number\tBB_fragments_in_range_coverage\n");
+
+  $summary_digestion_fh->print("$count_in_range\t$all_type_in_range_coverage\t$count_FB_BF_in_range\t$FB_BF_in_range_coverage");
+  $summary_digestion_fh->print("$count_FF_in_range\t$FF_in_range_coverage\t$count_BB_in_range\t$BB_in_range_coverage\n");
+
 
   my $lengths_distribution_start=$self->{lengths_distribution_start};
   my $lengths_distribution_end=$self->{lengths_distribution_end};
   my $lengths_distribution_step=$self->{lengths_distribution_step};
   my $lengths_distribution_tmp;
-  my (@starts,@ends,@counts,%lengths_distribution);
+  my (@starts,@ends,@counts,%three_types,%FB_BF,%FF,%BB);
 
   my $num_pair=0;
 
@@ -1354,14 +1550,20 @@ sub double_digest {
       $num_pair++;
       push @starts, '0';
       push @ends , $lengths_distribution_tmp;
-      $lengths_distribution{$num_pair}{"0bp-${lengths_distribution_tmp}bp"}=0;
+      $three_types{$num_pair}{"0bp-${lengths_distribution_tmp}bp"}=0;
+      $FB_BF{$num_pair}{"0bp-${lengths_distribution_tmp}bp"}=0;
+      $FF{$num_pair}{"0bp-${lengths_distribution_tmp}bp"}=0;
+      $BB{$num_pair}{"0bp-${lengths_distribution_tmp}bp"}=0;
 
       $num_pair++;
       my $tmp_start=$lengths_distribution_tmp+1;
       my $tmp_end=$lengths_distribution_tmp+$lengths_distribution_step;
       push @starts, $tmp_start;
       push @ends, $tmp_end;
-      $lengths_distribution{$num_pair}{"${tmp_start}bp-${tmp_end}bp"}=0;
+      $three_types{$num_pair}{"${tmp_start}bp-${tmp_end}bp"}=0;
+      $FB_BF{$num_pair}{"${tmp_start}bp-${tmp_end}bp"}=0;
+      $FF{$num_pair}{"${tmp_start}bp-${tmp_end}bp"}=0;
+      $BB{$num_pair}{"${tmp_start}bp-${tmp_end}bp"}=0;
       
     }
     elsif($lengths_distribution_tmp  < $lengths_distribution_end ){
@@ -1371,7 +1573,10 @@ sub double_digest {
         my $tmp_end=$lengths_distribution_tmp+$lengths_distribution_step;
         push @starts, $tmp_start;
         push @ends, $tmp_end;
-        $lengths_distribution{$num_pair}{"${tmp_start}bp-${tmp_end}bp"}=0;
+        $three_types{$num_pair}{"${tmp_start}bp-${tmp_end}bp"}=0;
+        $FB_BF{$num_pair}{"${tmp_start}bp-${tmp_end}bp"}=0;
+        $FF{$num_pair}{"${tmp_start}bp-${tmp_end}bp"}=0;
+        $BB{$num_pair}{"${tmp_start}bp-${tmp_end}bp"}=0;
         
     }
     elsif($lengths_distribution_tmp +$lengths_distribution_step >= $lengths_distribution_end){
@@ -1380,21 +1585,111 @@ sub double_digest {
       my $tmp_end=$lengths_distribution_end;
       push @starts, $tmp_start;
       push @ends, $tmp_end;
-      $lengths_distribution{$num_pair}{"${tmp_start}bp-${tmp_end}bp"}=0;
+      $three_types{$num_pair}{"${tmp_start}bp-${tmp_end}bp"}=0;
+      $FB_BF{$num_pair}{"${tmp_start}bp-${tmp_end}bp"}=0;
+      $FF{$num_pair}{"${tmp_start}bp-${tmp_end}bp"}=0;
+      $BB{$num_pair}{"${tmp_start}bp-${tmp_end}bp"}=0;
 
       $num_pair++;
       $tmp_start=$tmp_end+1;
       
       push @starts, $tmp_start;
       push @ends, 'bigger';
-      $lengths_distribution{$num_pair}{"${tmp_start}bp-bigger bp"}=0;
+      $three_types{$num_pair}{"${tmp_start}bp-longer"}=0;
+      $FB_BF{$num_pair}{"${tmp_start}bp-longer"}=0;
+      $FF{$num_pair}{"${tmp_start}bp-longer"}=0;
+      $BB{$num_pair}{"${tmp_start}bp-longer"}=0;
       
       }
     }
   }
-  
-
-
+  for (@lengths_of_FB_BF_fragments){
+    my $length=$_;
+    my $num_pair=1;
+    my $num_last_pair=@starts;
+    for($num_pair=1;$num_pair<=$num_last_pair;$num_pair++){
+      
+      my $array_index=$num_pair-1;
+      my $start=$starts[$array_index];
+      my $end=$ends[$array_index];
+      if($num_pair<$num_last_pair){
+        if($length>=$start && $length<=$end){
+          for my $description (keys %{$FB_BF{$num_pair}}){
+            $FB_BF{$num_pair}{$description}++;
+            last;
+          }
+          last;
+        }
+      }
+      elsif($num_pair==$num_last_pair){
+        if($length>=$start){
+          for my $description (keys %{$FB_BF{$num_pair}}){
+            $FB_BF{$num_pair}{$description}++;
+            last;
+          }
+          last;
+        }
+      }
+    }
+  }
+  for (@lengths_of_FF_fragments){
+    my $length=$_;
+    my $num_pair=1;
+    my $num_last_pair=@starts;
+    for($num_pair=1;$num_pair<=$num_last_pair;$num_pair++){
+      
+      my $array_index=$num_pair-1;
+      my $start=$starts[$array_index];
+      my $end=$ends[$array_index];
+      if($num_pair<$num_last_pair){
+        if($length>=$start && $length<=$end){
+          for my $description (keys %{$FF{$num_pair}}){
+            $FF{$num_pair}{$description}++;
+            last;
+          }
+          last;
+        }
+      }
+      elsif($num_pair==$num_last_pair){
+        if($length>=$start){
+          for my $description (keys %{$FF{$num_pair}}){
+            $FF{$num_pair}{$description}++;
+            last;
+          }
+          last;
+        }
+      }
+    }
+  }
+  for (@lengths_of_BB_fragments){
+    my $length=$_;
+    my $num_pair=1;
+    my $num_last_pair=@starts;
+    for($num_pair=1;$num_pair<=$num_last_pair;$num_pair++){
+      
+      my $array_index=$num_pair-1;
+      my $start=$starts[$array_index];
+      my $end=$ends[$array_index];
+      if($num_pair<$num_last_pair){
+        if($length>=$start && $length<=$end){
+          for my $description (keys %{$BB{$num_pair}}){
+            $BB{$num_pair}{$description}++;
+            last;
+          }
+          last;
+        }
+      }
+      elsif($num_pair==$num_last_pair){
+        if($length>=$start){
+          for my $description (keys %{$BB{$num_pair}}){
+            $BB{$num_pair}{$description}++;
+            last;
+          }
+          last;
+        }
+      }
+    }
+  }
   for (@lengths_of_fragments){
     my $length=$_;
     my $num_pair=1;
@@ -1406,8 +1701,8 @@ sub double_digest {
       my $end=$ends[$array_index];
       if($num_pair<$num_last_pair){
         if($length>=$start && $length<=$end){
-          for my $description (keys %{$lengths_distribution{$num_pair}}){
-            $lengths_distribution{$num_pair}{$description}++;
+          for my $description (keys %{$three_types{$num_pair}}){
+            $three_types{$num_pair}{$description}++;
             last;
           }
           last;
@@ -1415,8 +1710,8 @@ sub double_digest {
       }
       elsif($num_pair==$num_last_pair){
         if($length>=$start){
-          for my $description (keys %{$lengths_distribution{$num_pair}}){
-            $lengths_distribution{$num_pair}{$description}++;
+          for my $description (keys %{$three_types{$num_pair}}){
+            $three_types{$num_pair}{$description}++;
             last;
           }
           last;
@@ -1425,19 +1720,51 @@ sub double_digest {
     }
   }
   
-  $summary_digestion_fh->print("\nLengths\' scope\tNumber of fragments in this scope\tRatio of these fragments in all\n");
+  $summary_digestion_fh->print("\nLength_range\tthree_types_number\tthree_types_ratio\tFB_BF_number\tFB_BF_ratio\tFF_number\tFF_ratio\tBB_number\tBB_ratio\n");
+
+
+
   
   for(1..@starts){
     my $num_pair=$_;
-    for my $description(keys %{$lengths_distribution{$num_pair}}){
-      my $num_fragments=$lengths_distribution{$num_pair}{$description};
-      my $ratio;
-      if($num_all_frags>0){ 
-        $ratio=$num_fragments/$num_all_frags;
-        }else{
-          $ratio='N/A';
-        }
-      $summary_digestion_fh->print("$description\t$num_fragments\t$ratio\n");
+
+    for my $description(keys %{$three_types{$num_pair}}){
+
+      my $three_types_fragments_num=$three_types{$num_pair}{$description};
+      my $FB_BF_fragments_num=$FB_BF{$num_pair}{$description};
+      my $FF_fragments_num=$FF{$num_pair}{$description};
+      my $BB_fragments_num=$BB{$num_pair}{$description};
+
+      my ($three_types_ratio,$FB_BF_ratio,$FF_ratio,$BB_ratio);
+
+      if($count_all){
+        $three_types_ratio=$three_types_fragments_num/$count_all;
+      }else{
+        $three_types_ratio="N/A";
+      }
+
+      if($count_FB_BF){
+        $FB_BF_ratio=$FB_BF_fragments_num/$count_FB_BF;
+      }else{
+        $FB_BF_ratio="N/A";
+      } 
+
+      if($count_FF){
+        $FF_ratio=$FF_fragments_num/$count_FF;
+      }else{
+        $FF_ratio="N/A";
+      }
+
+      if($count_BB){
+        $BB_ratio=$BB_fragments_num/$count_BB;
+      }else{
+        $BB_ratio="N/A";
+      }
+
+      $summary_digestion_fh->print("$description\t$three_types_fragments_num\t$three_types_ratio\t");
+      $summary_digestion_fh->print("$FB_BF_fragments_num\t$FB_BF_ratio\t");
+      $summary_digestion_fh->print("$FF_fragments_num\t$FF_ratio\t");
+      $summary_digestion_fh->print("$BB_fragments_num\t$BB_ratio\n");
     }
   }
   $summary_digestion_fh->print("\n");
@@ -1446,7 +1773,7 @@ sub double_digest {
 =head2 add_SNPs
   
     $digest->add_SNPs(-SNPs=>'Full path of the SNPs file');
-        Adds the absolute path of the SNPs file to RestrictionDigest variable.
+      Adds the SNPs file to the object.
 =cut
 
 sub add_SNPs {
@@ -1465,7 +1792,7 @@ sub add_SNPs {
 =head2 count_SNPs_at_fragments
   
     $digest->count_SNPs_at_fragments();
-        Count the expected SNPs appeared in the framgents.
+        Count the expected SNPs located within the framgents.
 =cut
 
 sub count_SNPs_at_fragments {
@@ -1481,7 +1808,8 @@ sub count_SNPs_at_fragments {
         $self->{sequence_end}=$parameters{$_};
       }
       else{
-        die "Unacceptable parameters in the method <count_SNPs_at_fragments>, please perldoc RestrictionDigest for example or read README for more help\n";
+        die "Unacceptable parameters in the method <count_SNPs_at_fragments>, please perldoc RestrictionDigest
+        for example or read README for more help\n";
       }
     }
   }
@@ -1508,7 +1836,8 @@ sub count_SNPs_at_fragments {
     $sequence_type_code=2;
     my $sequence_length=$1;
     unless($sequence_length*2 <= $range1){
-      die"Unacceptable sequence_type when range's front border is $range1 bp. Please perldoc RestrictionDigest for example or read README for more help!\n";
+      die"Unacceptable sequence_type when range's front border is $range1 bp. Please perldoc RestrictionDigest
+      for example or read README for more help!\n";
     }
     else{
       $pe_sequence_length=$sequence_length;
@@ -1518,7 +1847,8 @@ sub count_SNPs_at_fragments {
     $sequence_type_code=1;
     my $sequence_length=$1;
     unless($sequence_length<=$range1){
-      die "Unacceptable sequence_type when range's front border is $range1 bp. Please perldoc RestrictionDigest for example or read README for more help!\n";
+      die "Unacceptable sequence_type when range's front border is $range1 bp. Please perldoc RestrictionDigest
+      for example or read README for more help!\n";
     }
     else{
       $se_sequence_length=$sequence_length;
@@ -1547,9 +1877,6 @@ sub count_SNPs_at_fragments {
       die "Unacceptable sequence_end. Please perldoc RestrictionDigest for example or read README for more help!\n";
     }
   }
-
-
-  
   my $output_dir=$self->{output_dir};
   $output_dir=~s/^(.+)\/?$/$1/;
 
@@ -1560,8 +1887,13 @@ sub count_SNPs_at_fragments {
   my $summary_digestion_fh=IO::File->new(">>$output_dir/digestion_summary_${name_reference}_by_${front_enzyme}_and_${later_enzyme}");
 
   # Make the file handle to the locs file of all fragments and fragments in range.
-  my $all_loc_file_fh=IO::File->new("$output_dir/position_frags_${name_reference}_by_${front_enzyme}_and_${later_enzyme}",'r');
-  my $loc_in_range_file_fh=IO::File->new("$output_dir/position_frags_in_range_${name_reference}_by_${front_enzyme}_and_${later_enzyme}",'r');
+
+  my $FB_BF_loc_fh=IO::File->new("$output_dir/position_FB_BF_frags_${name_reference}_by_${front_enzyme}_and_${later_enzyme}",'r');
+  my $FB_BF_loc_in_range_fh=IO::File->new("$output_dir/position_FB_BF_frags_in_range_${name_reference}_by_${front_enzyme}_and_${later_enzyme}",'r');
+  my $FF_loc_fh=IO::File->new("$output_dir/position_FF_frags_${name_reference}_by_${front_enzyme}_and_${later_enzyme}",'r');
+  my $FF_loc_in_range_fh=IO::File->new("$output_dir/position_FF_frags_in_range_${name_reference}_by_${front_enzyme}_and_${later_enzyme}",'r');
+  my $BB_loc_fh=IO::File->new("$output_dir/position_BB_frags_${name_reference}_by_${front_enzyme}_and_${later_enzyme}",'r');
+  my $BB_loc_in_range_fh=IO::File->new("$output_dir/position_BB_frags_in_range_${name_reference}_by_${front_enzyme}_and_${later_enzyme}",'r');
   
   # Hold SNPs into hash.
   my $SNPs_fh=IO::File->new("$SNPs",'r');
@@ -1569,39 +1901,43 @@ sub count_SNPs_at_fragments {
   while(<$SNPs_fh>){
     chomp;
     my ($SNPs_scaffold_name,$SNPs_pos,$type)=split /\s+/, $_;
-    push @{$SNPs{$SNPs_scaffold_name}}, $SNPs_pos;
+    $SNPs{$SNPs_scaffold_name}{$SNPs_pos}=1;
+    #push @{$SNPs{$SNPs_scaffold_name}}, $SNPs_pos;
   }
-  print "Counting SNPs at the output fragments...\t";
+  print "Counting SNPs at three types of fragments...\t";
   
   # Create the SNPs files to hold SNPs of all fragments and fragments in range.
-  my $SNPs_at_all_frags_fh=IO::File->new(">>$output_dir/SNPs_at_all_frags_${name_reference}_by_${front_enzyme}_and_${later_enzyme}");
-  my $SNPs_at_frags_in_range_fh=IO::File->new(">>$output_dir/SNPs_at_frags_in_range_${name_reference}_by_${front_enzyme}_and_${later_enzyme}");
-
-
+  #my $SNPs_at_FB_BF_all_frags_fh=IO::File->new(">>$output_dir/SNPs_at_FB_BF_all_frags_${name_reference}_by_${front_enzyme}_and_${later_enzyme}");
+  #my $SNPs_at_FB_BF_frags_in_range_fh=IO::File->new(">>$output_dir/SNPs_at_FB_BF_frags_in_range_${name_reference}_by_${front_enzyme}_and_${later_enzyme}");
 
   # Scan all locs file to count SNPs and output the result to the summary file.
-  my $all_SNPs_number=0;
+  my ($FB_BF_SNPs_number, $FF_SNPs_number, $BB_SNPs_number)=qw(0 0 0);
+
   if($sequence_type_code == 1){
     if($se_sequence_end_code==1){
-      while(<$all_loc_file_fh>){
+      while(<$FB_BF_loc_fh>){
         chomp;
         my($fragment_name,$strand,$enzyme1,$pos1,$enzyme2,$pos2,$length)=split /\t/, $_;
         my $scaffold_name;
-        if($fragment_name=~/^>(.+)-(\d+)/){
+        if($fragment_name=~/^>(.+)-(\d+)$/){
           $scaffold_name=$1;
         }
         if($SNPs{$scaffold_name}){
-          for my $SNP(@{$SNPs{$scaffold_name}}){
-            if($front_enzyme=~/$enzyme1/i){
-              if($SNP >=$pos1 && $SNP <=($pos1+$se_sequence_length-1)){
-                $all_SNPs_number++;
-                $SNPs_at_all_frags_fh->print("$scaffold_name\t$SNP\n");
+          if($front_enzyme=~/$enzyme1/i){
+            my $frag_start=$pos1;
+            my $frag_end=$pos1+$se_sequence_length-1;
+            for my $frag_pos ($frag_start..$frag_end){
+              if($SNPs{$scaffold_name}{$frag_pos}){
+                $FB_BF_SNPs_number++;
               }
             }
-            elsif($front_enzyme=~/$enzyme2/i){
-              if($SNP >= ($pos2-$se_sequence_length+1) && $SNP <=$pos2){
-                $all_SNPs_number++;
-                $SNPs_at_all_frags_fh->print("$scaffold_name\t$SNP\n");
+          }
+          elsif($front_enzyme=~/$enzyme2/i){
+            my $frag_start=$pos2-$se_sequence_length+1;
+            my $frag_end=$pos2;
+            for my $frag_pos ($frag_start..$frag_end){
+              if($SNPs{$scaffold_name}{$frag_pos}){
+                $FB_BF_SNPs_number++;
               }
             }
           }
@@ -1609,35 +1945,87 @@ sub count_SNPs_at_fragments {
       }
     }
     elsif($se_sequence_end_code==2){
-      while(<$all_loc_file_fh>){
+      while(<$FB_BF_loc_fh>){
         chomp;
         my($fragment_name,$strand,$enzyme1,$pos1,$enzyme2,$pos2,$length)=split /\t/, $_;
         my $scaffold_name;
-        if($fragment_name=~/^>(.+)-(\d+)/){
+        if($fragment_name=~/^>(.+)-(\d+)$/){
           $scaffold_name=$1;
         }
         if($SNPs{$scaffold_name}){
-          for my $SNP(@{$SNPs{$scaffold_name}}){
-            if($later_enzyme=~/$enzyme1/i){
-              if($SNP>=$pos1 && $SNP<=($pos1+$se_sequence_length-1)){
-                $all_SNPs_number++;
-                $SNPs_at_all_frags_fh->print("$scaffold_name\t$SNP\n");
+          if($later_enzyme=~/$enzyme1/i){
+            my $frag_start=$pos1;
+            my $frag_end=$pos1+$se_sequence_length-1;
+            for my $frag_pos ($frag_start..$frag_end){
+              if($SNPs{$scaffold_name}{$frag_pos}){
+                $FB_BF_SNPs_number++;
               }
             }
-            elsif($later_enzyme=~/$enzyme2/i){
-              if($SNP>= ($pos2-$se_sequence_length+1) && $SNP<=$pos2){
-                $all_SNPs_number++;
-                $SNPs_at_all_frags_fh->print("$scaffold_name\t$SNP\n");
+          }
+          elsif($later_enzyme=~/$enzyme2/i){
+            my $frag_start=$pos2-$se_sequence_length+1;
+            my $frag_end=$pos2;
+            for my $frag_pos ($frag_start..$frag_end){
+              if($SNPs{$scaffold_name}{$frag_pos}){
+                $FB_BF_SNPs_number++;
               }
             }
           }
         }
       }
     }
-    $summary_digestion_fh->print("Expected SNPs at all fragments via $sequence_type:\t$all_SNPs_number\n");
+    while(<$FF_loc_fh>){
+      chomp;
+      my ($fragment_name,$strand, $enzyme1,$pos1,$enzyme2,$pos2,$length)=split /\t/, $_;
+      my $scaffold_name;
+      if($fragment_name=~/^>(.+)-(\d+)$/){
+        $scaffold_name=$1;
+      }
+      if($SNPs{$scaffold_name}){
+        my $frag_start1=$pos1; my $frag_end1=$pos1+$se_sequence_length-1;
+        my $frag_start2=$pos2-$se_sequence_length+1; my $frag_end2=$pos2;
+        for my $frag_pos ($frag_start1..$frag_end1){
+          if($SNPs{$scaffold_name}{$frag_pos}){
+            $FF_SNPs_number++;
+          }
+        }
+        for my $frag_pos ($frag_start2..$frag_end2){
+          if($SNPs{$scaffold_name}{$frag_pos}){
+            $FF_SNPs_number++;
+          }
+        }
+      }
+    }
+    $FF_SNPs_number=int($FF_SNPs_number/2);
+    while(<$BB_loc_fh>){
+        chomp;
+        my ($fragment_name,$strand, $enzyme1,$pos1,$enzyme2,$pos2,$length)=split /\t/, $_;
+        my $scaffold_name;
+        if($fragment_name=~/^>(.+)-(\d+)$/){
+          $scaffold_name=$1;
+        }
+        if($SNPs{$scaffold_name}){
+        my $frag_start1=$pos1; my $frag_end1=$pos1+$se_sequence_length-1;
+        my $frag_start2=$pos2-$se_sequence_length+1; my $frag_end2=$pos2;
+        for my $frag_pos ($frag_start1..$frag_end1){
+          if($SNPs{$scaffold_name}{$frag_pos}){
+            $BB_SNPs_number++;
+          }
+        }
+        for my $frag_pos ($frag_start2..$frag_end2){
+          if($SNPs{$scaffold_name}{$frag_pos}){
+            $BB_SNPs_number++;
+          }
+        }
+      }
+    }
+    $BB_SNPs_number=int($BB_SNPs_number/2);
+    $summary_digestion_fh->print("Expected_SNPs_at_FB_BF_all_fragments_via_$sequence_type:\t$FB_BF_SNPs_number\n");
+    $summary_digestion_fh->print("Expected_SNPs_at_FF_all_fragments_via_$sequence_type:\t$FF_SNPs_number\n");
+    $summary_digestion_fh->print("Expected_SNPs_at_BB_all_fragments_via_$sequence_type:\t$BB_SNPs_number\n");
   }
   elsif($sequence_type_code ==2){
-    while(<$all_loc_file_fh>){
+    while(<$FB_BF_loc_fh>){
       chomp;
       my($fragment_name,$strand,$enzyme1,$pos1,$enzyme2,$pos2,$length)=split /\t/, $_;
       my $scaffold_name;
@@ -1645,43 +2033,100 @@ sub count_SNPs_at_fragments {
         $scaffold_name=$1;
       }
       if($SNPs{$scaffold_name}){
-        for my $SNP(@{$SNPs{$scaffold_name}}){
-          if( ($SNP>=$pos1 && $SNP<=($pos1+$pe_sequence_length-1)) || ( $SNP>= ($pos2-$pe_sequence_length+1) && $SNP<=$pos2 ) ){
-          $all_SNPs_number++;
-          $SNPs_at_all_frags_fh->print("$scaffold_name\t$SNP\n");
+        my $frag_start1=$pos1; my $frag_end1=$pos1+$pe_sequence_length-1;
+        my $frag_start2=$pos2-$pe_sequence_length+1; my $frag_end2=$pos2;
+        for my $frag_pos ($frag_start1..$frag_end1){
+          if($SNPs{$scaffold_name}{$frag_pos}){
+            $FB_BF_SNPs_number++;
+          }
+        }
+        for my $frag_pos ($frag_start2..$frag_end2){
+          if($SNPs{$scaffold_name}{$frag_pos}){
+            $FB_BF_SNPs_number++;
           }
         }
       }
     }
-    $summary_digestion_fh->print("Expected SNPs at all fragments via $sequence_type:\t$all_SNPs_number\n");
+    while(<$FF_loc_fh>){
+      chomp;
+      my($fragment_name,$strand,$enzyme1,$pos1,$enzyme2,$pos2,$length)=split /\t/, $_;
+      my $scaffold_name;
+      if($fragment_name=~/^>(.+)-(\d+)/){
+        $scaffold_name=$1;
+      }
+      if($SNPs{$scaffold_name}){
+        my $frag_start1=$pos1; my $frag_end1=$pos1+$pe_sequence_length-1;
+        my $frag_start2=$pos2-$pe_sequence_length+1; my $frag_end2=$pos2;
+        for my $frag_pos ($frag_start1..$frag_end1){
+          if($SNPs{$scaffold_name}{$frag_pos}){
+            $FF_SNPs_number++;
+          }
+        }
+        for my $frag_pos ($frag_start2..$frag_end2){
+          if($SNPs{$scaffold_name}{$frag_pos}){
+            $FF_SNPs_number++;
+          }
+        }
+      }
+    }
+    while(<$BB_loc_fh>){
+      chomp;
+      my($fragment_name,$strand,$enzyme1,$pos1,$enzyme2,$pos2,$length)=split /\t/, $_;
+      my $scaffold_name;
+      if($fragment_name=~/^>(.+)-(\d+)/){
+        $scaffold_name=$1;
+      }
+      if($SNPs{$scaffold_name}){
+        my $frag_start1=$pos1; my $frag_end1=$pos1+$pe_sequence_length-1;
+        my $frag_start2=$pos2-$pe_sequence_length+1; my $frag_end2=$pos2;
+        for my $frag_pos ($frag_start1..$frag_end1){
+          if($SNPs{$scaffold_name}{$frag_pos}){
+            $BB_SNPs_number++;
+          }
+        }
+        for my $frag_pos ($frag_start2..$frag_end2){
+          if($SNPs{$scaffold_name}{$frag_pos}){
+            $BB_SNPs_number++;
+          }
+        }
+      }
+    }
+    $summary_digestion_fh->print("Expected_SNPs_at_FB_BF_all_fragments_via_$sequence_type:\t$FB_BF_SNPs_number\n");
+    $summary_digestion_fh->print("Expected_SNPs_at_FF_all_fragments_via_$sequence_type:\t$FF_SNPs_number\n");
+    $summary_digestion_fh->print("Expected_SNPs_at_BB_all_fragments_via_$sequence_type:\t$BB_SNPs_number\n");
   }
 
   
   # Scan locs in range file to count SNPs and output the result to the summary file.
+  my ($FB_BF_SNPs_in_range_number, $FF_SNPs_in_range_number, $BB_SNPs_in_range_number)=qw(0 0 0);
 
-  my $SNPs_in_range_number=0;
-
+  # Single end sequencing.
   if($sequence_type_code == 1){
+    # Process FB_BF file.
     if($se_sequence_end_code==1){
-      while(<$loc_in_range_file_fh>){
+      while(<$FB_BF_loc_in_range_fh>){
         chomp;
         my($fragment_name,$strand,$enzyme1,$pos1,$enzyme2,$pos2,$length)=split /\t/, $_;
         my $scaffold_name;
-        if($fragment_name=~/^>(.+)-(\d+)/){
+        if($fragment_name=~/^>(.+)-(\d+)$/){
           $scaffold_name=$1;
         }
         if($SNPs{$scaffold_name}){
-          for my $SNP(@{$SNPs{$scaffold_name}}){
-            if($front_enzyme=~/$enzyme1/i){
-              if($SNP>=$pos1 && $SNP<=($pos1+$se_sequence_length-1)){
-                $SNPs_in_range_number++;
-                $SNPs_at_frags_in_range_fh->print("$scaffold_name\t$SNP\n");
+          if($front_enzyme=~/$enzyme1/i){
+            my $frag_start=$pos1;
+            my $frag_end=$pos1+$se_sequence_length-1;
+            for my $frag_pos ($frag_start..$frag_end){
+              if($SNPs{$scaffold_name}{$frag_pos}){
+                $FB_BF_SNPs_in_range_number++;
               }
             }
-            elsif($front_enzyme=~/$enzyme2/i){
-              if($SNP>= ($pos2-$se_sequence_length+1) && $SNP<=$pos2){
-                $SNPs_in_range_number++;
-                $SNPs_at_frags_in_range_fh->print("$scaffold_name\t$SNP\n");
+          }
+          elsif($front_enzyme=~/$enzyme2/i){
+            my $frag_start=$pos2-$se_sequence_length+1;
+            my $frag_end=$pos2;
+            for my $frag_pos ($frag_start..$frag_end){
+              if($SNPs{$scaffold_name}{$frag_pos}){
+                $FB_BF_SNPs_in_range_number++;
               }
             }
           }
@@ -1689,51 +2134,159 @@ sub count_SNPs_at_fragments {
       }
     }
     elsif($se_sequence_end_code==2){
-      while(<$loc_in_range_file_fh>){
+      while(<$FB_BF_loc_in_range_fh>){
         chomp;
         my($fragment_name,$strand,$enzyme1,$pos1,$enzyme2,$pos2,$length)=split /\t/, $_;
         my $scaffold_name;
-        if($fragment_name=~/^>(.+)-(\d+)/){
+        if($fragment_name=~/^>(.+)-(\d+)$/){
           $scaffold_name=$1;
         }
         if($SNPs{$scaffold_name}){
-          for my $SNP(@{$SNPs{$scaffold_name}}){
-            if($later_enzyme=~/$enzyme1/i){
-              if($SNP>=$pos1 && $SNP<=($pos1+$se_sequence_length-1)){
-                $SNPs_in_range_number++;
-                $SNPs_at_frags_in_range_fh->print("$scaffold_name\t$SNP\n");
+          if($later_enzyme=~/$enzyme1/i){
+            my $frag_start=$pos1;
+            my $frag_end=$pos1+$se_sequence_length-1;
+            for my $frag_pos ($frag_start..$frag_end){
+              if($SNPs{$scaffold_name}{$frag_pos}){
+                $FB_BF_SNPs_in_range_number++;
               }
             }
-            elsif($later_enzyme=~/$enzyme2/i){
-              if($SNP>= ($pos2-$se_sequence_length+1) && $SNP<=$pos2){
-                $SNPs_in_range_number++;
-                $SNPs_at_frags_in_range_fh->print("$scaffold_name\t$SNP\n");
+          }
+          elsif($later_enzyme=~/$enzyme2/i){
+            my $frag_start=$pos2-$se_sequence_length+1;
+            my $frag_end=$pos2;
+            for my $frag_pos ($frag_start..$frag_end){
+              if($SNPs{$scaffold_name}{$frag_pos}){
+                $FB_BF_SNPs_in_range_number++;
               }
             }
           }
         }
       }
     }
-    $summary_digestion_fh->print("Expected SNPs at fragments in range via $sequence_type:\t$SNPs_in_range_number\n");
-  }
-  elsif($sequence_type_code ==2){
-    while(<$loc_in_range_file_fh>){
+    # Process FF file.
+    while(<$FF_loc_in_range_fh>){
       chomp;
-      my($fragment_name,$strand,$enzyme1,$pos1,$enzyme2,$pos2,$length)=split /\t/, $_;
+      my ($fragment_name,$strand, $enzyme1,$pos1,$enzyme2,$pos2,$length)=split /\t/, $_;
       my $scaffold_name;
-      if($fragment_name=~/^>(.+)-(\d+)/){
+      if($fragment_name=~/^>(.+)-(\d+)$/){
         $scaffold_name=$1;
       }
       if($SNPs{$scaffold_name}){
-        for my $SNP(@{$SNPs{$scaffold_name}}){
-          if( ($SNP>=$pos1 && $SNP<=($pos1+$pe_sequence_length-1)) || ( $SNP>= ($pos2-$pe_sequence_length+1) && $SNP<=$pos2 ) ){
-          $SNPs_in_range_number++;
-          $SNPs_at_frags_in_range_fh->print("$scaffold_name\t$SNP\n");
+        my $frag_start1=$pos1; my $frag_end1=$pos1+$se_sequence_length-1;
+        my $frag_start2=$pos2-$se_sequence_length+1; my $frag_end2=$pos2;
+        for my $frag_pos ($frag_start1..$frag_end1){
+          if($SNPs{$scaffold_name}{$frag_pos}){
+            $FF_SNPs_in_range_number++;
+          }
+        }
+        for my $frag_pos ($frag_start2..$frag_end2){
+          if($SNPs{$scaffold_name}{$frag_pos}){
+            $FF_SNPs_in_range_number++;
           }
         }
       }
     }
-    $summary_digestion_fh->print("Expected SNPs at fragments in range via $sequence_type:\t$SNPs_in_range_number\n");
+    $FF_SNPs_in_range_number=int($FF_SNPs_in_range_number/2);
+    # Process BB file.
+    while(<$BB_loc_in_range_fh>){
+      chomp;
+      my ($fragment_name,$strand, $enzyme1,$pos1,$enzyme2,$pos2,$length)=split /\t/, $_;
+      my $scaffold_name;
+      if($fragment_name=~/^>(.+)-(\d+)$/){
+        $scaffold_name=$1;
+      }
+      if($SNPs{$scaffold_name}){
+        my $frag_start1=$pos1; my $frag_end1=$pos1+$se_sequence_length-1;
+        my $frag_start2=$pos2-$se_sequence_length+1; my $frag_end2=$pos2;
+        for my $frag_pos ($frag_start1..$frag_end1){
+          if($SNPs{$scaffold_name}{$frag_pos}){
+            $BB_SNPs_in_range_number++;
+          }
+        }
+        for my $frag_pos ($frag_start2..$frag_end2){
+          if($SNPs{$scaffold_name}{$frag_pos}){
+            $BB_SNPs_in_range_number++;
+          }
+        }
+      }
+    }
+    $BB_SNPs_in_range_number=int($BB_SNPs_in_range_number/2);
+    # Output SNPs numbers.
+    $summary_digestion_fh->print("Expected_SNPs_at_FB_BF_fragments_in_range_via_$sequence_type:\t$FB_BF_SNPs_in_range_number\n");
+    $summary_digestion_fh->print("Expected_SNPs_at_FF_fragments_in_range_via_$sequence_type:\t$FF_SNPs_in_range_number\n");
+    $summary_digestion_fh->print("Expected_SNPs_at_BB_fragments_in_range_via_$sequence_type:\t$BB_SNPs_in_range_number\n");
+  }
+  # Pair end sequencing.
+  elsif($sequence_type_code ==2){
+    while(<$FB_BF_loc_in_range_fh>){
+      chomp;
+      my($fragment_name,$strand,$enzyme1,$pos1,$enzyme2,$pos2,$length)=split /\t/, $_;
+      my $scaffold_name;
+      if($fragment_name=~/^>(.+)-(\d+)$/){
+        $scaffold_name=$1;
+      }
+      if($SNPs{$scaffold_name}){
+        my $frag_start1=$pos1; my $frag_end1=$pos1+$pe_sequence_length-1;
+        my $frag_start2=$pos2-$pe_sequence_length+1; my $frag_end2=$pos2;
+        for my $frag_pos ($frag_start1..$frag_end1){
+          if($SNPs{$scaffold_name}{$frag_pos}){
+            $FB_BF_SNPs_in_range_number++;
+          }
+        }
+        for my $frag_pos ($frag_start2..$frag_end2){
+          if($SNPs{$scaffold_name}{$frag_pos}){
+            $FB_BF_SNPs_in_range_number++;
+          }
+        }
+      }
+    }
+    while(<$FF_loc_in_range_fh>){
+      chomp;
+      my($fragment_name,$strand,$enzyme1,$pos1,$enzyme2,$pos2,$length)=split /\t/, $_;
+      my $scaffold_name;
+      if($fragment_name=~/^>(.+)-(\d+)$/){
+        $scaffold_name=$1;
+      }
+      if($SNPs{$scaffold_name}){
+        my $frag_start1=$pos1; my $frag_end1=$pos1+$pe_sequence_length-1;
+        my $frag_start2=$pos2-$pe_sequence_length+1; my $frag_end2=$pos2;
+        for my $frag_pos ($frag_start1..$frag_end1){
+          if($SNPs{$scaffold_name}{$frag_pos}){
+            $FF_SNPs_in_range_number++;
+          }
+        }
+        for my $frag_pos ($frag_start2..$frag_end2){
+          if($SNPs{$scaffold_name}{$frag_pos}){
+            $FF_SNPs_in_range_number++;
+          }
+        }
+      }
+    }
+    while(<$BB_loc_in_range_fh>){
+      chomp;
+      my($fragment_name,$strand,$enzyme1,$pos1,$enzyme2,$pos2,$length)=split /\t/, $_;
+      my $scaffold_name;
+      if($fragment_name=~/^>(.+)-(\d+)$/){
+        $scaffold_name=$1;
+      }
+      if($SNPs{$scaffold_name}){
+        my $frag_start1=$pos1; my $frag_end1=$pos1+$pe_sequence_length-1;
+        my $frag_start2=$pos2-$pe_sequence_length+1; my $frag_end2=$pos2;
+        for my $frag_pos ($frag_start1..$frag_end1){
+          if($SNPs{$scaffold_name}{$frag_pos}){
+            $BB_SNPs_in_range_number++;
+          }
+        }
+        for my $frag_pos ($frag_start2..$frag_end2){
+          if($SNPs{$scaffold_name}{$frag_pos}){
+            $BB_SNPs_in_range_number++;
+          }
+        }
+      }
+    }
+    $summary_digestion_fh->print("Expected_SNPs_at_FB_BF_fragments_in_range_via_$sequence_type:\t$FB_BF_SNPs_in_range_number\n");
+    $summary_digestion_fh->print("Expected_SNPs_at_FF_fragments_in_range_via_$sequence_type:\t$FF_SNPs_in_range_number\n");
+    $summary_digestion_fh->print("Expected_SNPs_at_BB_fragments_in_range_via_$sequence_type:\t$BB_SNPs_in_range_number\n");
   }
   print "Done!\n";
 }
@@ -1742,9 +2295,8 @@ sub count_SNPs_at_fragments {
 =head2 add_gff
 
     $digest->add_gff(-ref=>'Full path of the gff file');
-        Adds the absolute path of gff file to RestrictionDigest variable. 
-        If User want to calculate the coverage ratio of different genomic strutures by the digested 
-        fragments, this method is obligatory.
+        Adds the Gff file to RestrictionDigest the object. 
+
 =cut
 
 sub add_gff { 
@@ -1763,9 +2315,8 @@ sub add_gff {
 =head2 all_frags_coverage_ratio
 
      $digest->all_frags_coverage_ratio();
-          Calculate the coverage ratio of different parts of the genome reference, 
-          including mRNA, CDS, UTR and intergenic region, by all digested fragments.
-          This process will take a very long time, please be patient.  
+          Calculate the coverage ratio of different genome structures covered by all restriction fragments.
+
 =cut
 
 sub all_frags_coverage_ratio {
@@ -1780,17 +2331,19 @@ sub all_frags_coverage_ratio {
   my $output_dir=$self->{output_dir};
   $output_dir=~s/^(.+)\/?$/$1/;
 
-  my $loc_file_all_frags="$output_dir/position_frags_${basename_ref}_by_${e1}_and_${e2}";
-
-  $self->genome_structure_coverage_ratio($loc_file_all_frags);
+  my $FB_BF_loc_all_frags="$output_dir/position_FB_BF_frags_${basename_ref}_by_${e1}_and_${e2}";
+  my $FF_loc_all_frags="$output_dir/position_FF_frags_${basename_ref}_by_${e1}_and_${e2}";
+  my $BB_loc_all_frags="$output_dir/position_BB_frags_${basename_ref}_by_${e1}_and_${e2}";
+  $self->genome_structure_coverage_ratio($FB_BF_loc_all_frags);
+  $self->genome_structure_coverage_ratio($FF_loc_all_frags);
+  $self->genome_structure_coverage_ratio($BB_loc_all_frags);
 }
 
 =head2 frags_in_range_coverage_ratio
 
      $digest->frags_in_range_coverage_ratio();
-          Calculate the coverage ratio of different parts of the genome reference, 
-          including mRNA, CDS, UTR and intergenic region, by the fragments in range.
-          This process will take a very long time, please be patient. 
+      Calculate the coverage ratio of different genome structures covered by restriction fragments in range.
+ 
 =cut
 
 sub frags_in_range_coverage_ratio {
@@ -1805,15 +2358,18 @@ sub frags_in_range_coverage_ratio {
   my $output_dir=$self->{output_dir};
   $output_dir=~s/^(.+)\/?$/$1/;
 
-  my $loc_file_all_frags="$output_dir/position_frags_in_range_${basename_ref}_by_${e1}_and_${e2}";
+  my $FB_BF_loc_frags_in_range="$output_dir/position_FB_BF_frags_in_range_${basename_ref}_by_${e1}_and_${e2}";
+  my $FF_loc_frags_in_range="$output_dir/position_FF_frags_in_range_${basename_ref}_by_${e1}_and_${e2}";
+  my $BB_loc_frags_in_range="$output_dir/position_BB_frags_in_range_${basename_ref}_by_${e1}_and_${e2}";
 
-  $self->genome_structure_coverage_ratio($loc_file_all_frags);
+  $self->genome_structure_coverage_ratio($FB_BF_loc_frags_in_range);
+  $self->genome_structure_coverage_ratio($FF_loc_frags_in_range);
+  $self->genome_structure_coverage_ratio($BB_loc_frags_in_range);
 }
 
 =head2  genome_structure_coverage_ratio
 
-        A subroutine invoked by the 'all_frags_coverage_ratio' and 
-        the 'frags_in_range_coverage_ratio' methods. 
+        A subroutine invoked by the 'all_frags_coverage_ratio' and the 'frags_in_range_coverage_ratio' methods. 
         User do not use this subroutine.
 
 =cut
@@ -1849,11 +2405,27 @@ sub genome_structure_coverage_ratio {
   
   my $basename_loc_frags_file=basename($loc_frags_file);
 
-  if($basename_loc_frags_file =~/in_range/){
-    $coverage_ratio_fh=IO::File->new(">>$output_dir/genome_coverage_ratio_in_range_${basename_ref}_by_${e1}_and_${e2}");
+  if($basename_loc_frags_file =~/frags_in_range/){
+    if($basename_loc_frags_file=~/^position_FB_BF_frags_in_range/){
+      $coverage_ratio_fh=IO::File->new(">>$output_dir/genome_coverage_by_FB_BF_frags_in_range_${basename_ref}_by_${e1}_and_${e2}");
+    }
+    elsif($basename_loc_frags_file=~/^position_FF_frags_in_range/){
+      $coverage_ratio_fh=IO::File->new(">>$output_dir/genome_coverage_by_FF_frags_in_range_${basename_ref}_by_${e1}_and_${e2}");
+    }
+    elsif($basename_loc_frags_file=~/^position_BB_frags_in_range/){
+      $coverage_ratio_fh=IO::File->new(">>$output_dir/genome_coverage_by_BB_frags_in_range_${basename_ref}_by_${e1}_and_${e2}");
+    }
   }
   else{
-    $coverage_ratio_fh=IO::File->new(">>$output_dir/genome_coverage_ratio_${basename_ref}_by_${e1}_and_${e2}");
+    if($basename_loc_frags_file=~/^position_FB_BF_frags/){
+      $coverage_ratio_fh=IO::File->new(">>$output_dir/genome_coverage_by_FB_BF_frags_${basename_ref}_by_${e1}_and_${e2}");
+    }
+    elsif($basename_loc_frags_file=~/^position_FF_frags/){
+      $coverage_ratio_fh=IO::File->new(">>$output_dir/genome_coverage_by_FF_frags_${basename_ref}_by_${e1}_and_${e2}");
+    }
+    elsif($basename_loc_frags_file=~/^position_BB_frags/){
+      $coverage_ratio_fh=IO::File->new(">>$output_dir/genome_coverage_by_BB_frags_${basename_ref}_by_${e1}_and_${e2}");
+    }
   }
 
   $coverage_ratio_fh->print("ScaffoldName\tIntergenicLength\tIntergenicMapLength\tIntergenicMapRatio\tGenesLength\tGenesMapLength\tGenesMapRatio\tExonsLength\tExonsMapLength\tExonsMapRatio\tIntronsLength\tIntronsMapLength\tIntronsMapRatio\n");
@@ -1868,7 +2440,7 @@ sub genome_structure_coverage_ratio {
       my $gff_fh=IO::File->new($gff,'r');
       # Create two hashes to check if start or stop position exists.
       my %gff; my %exon_check; my %gene_check;
-      print "Scanning the GFF file...\t";
+      print "Reading the GFF file...\t";
 
       my($gff_gene_count,$gff_exon_count)=qw(0 0);
       while(<$gff_fh>){
@@ -1901,11 +2473,11 @@ sub genome_structure_coverage_ratio {
       $gff_fh->close;
       print "Done!\n";
 
-      # Scan the loc file and fetch the information.
+      # Read the loc file and fetch the information.
       
       my $loc_frags_file_fh=IO::File->new($loc_frags_file,'r');
       my %all_locs;
-      print "Scanning the positions file...\t";
+      print "Reading the positions file...\t";
       while(<$loc_frags_file_fh>){
         chomp;
         my($frgt_name,$strand,$front_enzyme,$start_coor,$later_enzyme,$stop_coor,$length)=split /\t/,$_;
@@ -1919,7 +2491,7 @@ sub genome_structure_coverage_ratio {
       print "Done!\n";
 
 
-  # Handle every scaffold one by one.
+  # Process every scaffold one by one.
   my $seq_tmp="";
   my $seq_name_tmp="";
   my $scfd_name;
@@ -2390,13 +2962,13 @@ sub genome_structure_coverage_ratio {
   else{
   $all_intergenic_map_ratio=$all_intergenic_map_length/$all_intergenic_length;}
   
-  $coverage_ratio_fh->print("Intergenic region map ratio is\t$all_intergenic_map_ratio\nGenes region map ratio is\t$all_gene_map_ratio\nExon region map ratio is\t$all_exon_map_ratio\nIntron region map ratio is\t$all_intron_map_ratio\n");
+  $coverage_ratio_fh->print("Intergenic region coverage ratio is\t$all_intergenic_map_ratio\nGenes region coverage ratio is\t$all_gene_map_ratio\nExon region coverage ratio is\t$all_exon_map_ratio\nIntron region coverage ratio is\t$all_intron_map_ratio\n");
 }
 
 
 
 
-package RestrictionDigest::Single;
+package RestrictionDigest::SingleItem::Single;
 
 use 5.8.0;
 use strict;
@@ -2405,7 +2977,7 @@ use warnings FATAL => 'all';
 =head1 NAME
 
 
-RestrictionDigest::Single - the simulation tool for singel enzyme digestion!
+RestrictionDigest::SingleItem::Single
 
 =head1 VERSION
 
@@ -2419,20 +2991,34 @@ our $VERSION = '0.01';
 
 =head1 SYNOPSIS
 
-RestrictionDigest::Single is used for the simulation of single-enzyme GBS/RAD approaches.
+RestrictionDigest::SingleItem::Single is used for the simulation of single-enzyme digestion of one reference genome.
 
 
     use RestrictionDigest;
 
-    $digest = RestrictionDigest::Single->new();
-   
-    $digest->add_ref($reference_file); # $reference_file  refers to the full path of the reference file;
+    $digest=RestrictionDigest::SingleItem::Single->new();
     
-    $digest->add_single_enzyme($enzyme); # $enzyme refers to the enzyme User wants to use in the digestion simulation;
+    $digest->add_ref(-reference=>'Full path of the reference file');
 
-    $digest->add_output_dir($output_dir);# $output_dir="A directory in which you want to put the result files";
+    $digest->new_enzyme(-enzyme_name=>'Ncol',-recognition_site=>'C|CATGG');
 
-    $species->single_digest();
+    $digest->add_single_enzyme(-enzyme=>'EcoRI');
+
+    $digest->add_output_dir(-output_dir=>'Full path of the output directory');
+
+    $digest->change_range(-start => 301, -end => 500);
+
+    $digest->change_lengths_distribution_parameters(-front => 200, -behind => 800, -step => 25);
+
+    $digest->single_digest();
+
+    $digest->add_SNPs(-SNPs => 'full path to the SNPs coordinate file');
+
+    $digest->count_SNPs_at_fragments(-sequence_type=>'125SE', -sequence_end=>'front_enzyme');
+
+    $digest->add_GFF(-gff=>'full path to the GFF file');
+
+    $digest->frags_in_range_coverage_ratio();
 
 
 =cut
@@ -2505,7 +3091,7 @@ use vars qw(%fields %enzyme_list);
 
 =head2 new
      
-     $digest=RestrictionDigest::Single->new(); 
+     $digest=RestrictionDigest::SingleItem::Single->new(); 
           Create a new object.
 
 =cut
@@ -2522,7 +3108,7 @@ sub new {
 =head2 add_ref
      
      $digest->add_ref(-reference=>'Full path of the reference file');
-          Add the reference file  to the RestrictionDigest variable.
+          Add the reference file to the object.
 
 =cut
 
@@ -2542,7 +3128,7 @@ sub add_ref {
 =head2 add_single_enzyme
      
      $digest->add_single_enzyme(-enzyme=>'EcoRI');
-          Add the single enzyme's name used to digest the whole genome.
+          Add the single enzyme name used to digest the reference genome.
           
 =cut
 
@@ -2555,7 +3141,8 @@ sub add_single_enzyme {
       $self->{enzyme}=$parameters{$_};
     }
     else{
-      die"Unacceptable parameters in the method <add_singel_enzyme>, please perldoc RestrictionDigest for example or read README for more help!\n";
+      die"Unacceptable parameters in the method <add_singel_enzyme>, please perldoc RestrictionDigest
+      for example or read README for more help!\n";
     }
   }
   
@@ -2575,14 +3162,8 @@ sub add_single_enzyme {
 =head2 new_enzyme
 
      $digest->new_enzyme(-enzyme_name=>'EcoRI', -recognition_site=>'G|AATTC');
-     
-     If the enzyme User wants to use does not exists in the default enzyme-pool, the enzyme can be added to the enzyme-pool.
-     
-     For now, the enzymes in the default enzyme pool are  as follows:
-           EcoRI,HinfI,AluI,AvaII,BamHI,HindIII,MseI,MspI,NdeI,PstI,SalI,XbaI,XhoI,NlaIII.
-     
-     Adding new enzyme(s) to the enzyme-pool is easy but the enzyme added to the pool is temporary. The added enzyme(s) is active
-     only in the class context to which the 'new_method' belongs.
+      If the enzyme User wants to use does not exists in the enzyme resevior of the module, the enzyme can be added
+     temporarily to the enzyme resevior.
 
 =cut
 
@@ -2610,10 +3191,9 @@ sub new_enzyme {
 
 =head2 change_range
 
-     $digest->change_range(-start=>201, -end=>500);
-          Usually, not all fragments are needed by the scientists. The fragments in particular range are more attractive to them.
-          RestrictionDigest provides the sequences and the positions on the reference of these fragments in range. The default range is 
-           [201bp, 500]. User can change this range via the method <change_range>. 
+     $digest->change_lengths_distribution_parameters(-front=>100,-behind=>1000,-step=>50);
+      This function is used to change the resolution of fragments lengths distribution. This function has three
+      parameters: front and behind define the two boundary length values, and step defines the step length.
 
 =cut
 
@@ -2640,10 +3220,8 @@ sub change_range {
 =head2 change_lengths_distribution_parameters
     
      $digest->change_lengths_distribution_parameters(-front=>100,-behind=>1000,-step=>50);
-        This program will give a simple summary of the lengths of all fragments after digestion. By default, three scopes, which are  
-         <=100bp, 101bp-1000bp and >1000bp, are given. The number of the fragments whose length fallen in these scopes are given. More 
-         fine sorted, the 101bp-1000bp scope is split by the step of 50bp. These three parameters: the front edge and the behind edge 
-         of the scope and the step can be changed via the method 'change_lengths_distribution_parameters';
+      This function is used to change the resolution of fragments lengths distribution. This function has three
+      parameters: front and behind define the two boundary length values, and step defines the step length.
 =cut
 
 sub change_lengths_distribution_parameters {
@@ -2660,7 +3238,8 @@ sub change_lengths_distribution_parameters {
       $self->{lengths_distribution_step}=$parameters{$_};
     }
     else{
-      die"Unacceptable parameters in the method <change_lengths_distribution_parameters>, please perldoc RestrictionDigest for example or read README for more help!\n";
+      die"Unacceptable parameters in the method <change_lengths_distribution_parameters>, please
+      perldoc RestrictionDigest for example or read README for more help!\n";
     }
   }
 }
@@ -2671,7 +3250,6 @@ sub change_lengths_distribution_parameters {
     
      $digest->add_output_dir(-output_dir=>'Full path of the output directory');
           Adds the directory into which the result files are put by the program. 
-          The directory must be in the absolute path format. 
 
 =cut
 
@@ -2683,7 +3261,8 @@ sub add_output_dir {
       $self->{output_dir}=$parameters{$_};
     }
     else{
-      die "Unacceptable parameter in the method <add_output_dir>, please perldoc RestrictionDigest for example or read README for more help!\n";
+      die "Unacceptable parameter in the method <add_output_dir>, please perldoc RestrictionDigest
+      for example or read README for more help!\n";
     }
   }
   if(-d $self->{output_dir} ) {
@@ -2696,11 +3275,8 @@ sub add_output_dir {
 
      $digest->single_digest();
           Execute the digestion process. 
-          This process will produce several result files which will be located in the output directory 
-          added through the add_output_dir method. 
-          This process will take some time. It depends on the size of the reference file.
-          During the process, Prompting messages will be output to the STDOUT 
-          like "Digestion: >ScaffoldName is done!".
+          This process will produce several result files which will be located in the output directory a
+          dded through the add_output_dir method. 
 
 =cut
 
@@ -2744,8 +3320,10 @@ sub single_digest {
   my $all_loc_file_fh=IO::File->new(">>$output_dir/position_frags_${name_reference}_by_${enzyme}");
   my $seq_in_range_file_fh=IO::File->new(">>$output_dir/seq_frags_in_range_${name_reference}_by_${enzyme}");
   my $loc_in_range_file_fh=IO::File->new(">>$output_dir/position_frags_in_range_${name_reference}_by_${enzyme}");
-  my $reduced_ratio_every_scaffold_file_fh=IO::File->new(">>$output_dir/reduced_ratio_every_scaffold_${name_reference}_by_${enzyme}");
+  my $reduced_ratio_every_scaffold_file_fh=IO::File->new(">>$output_dir/coverage_ratio_every_chromosome_${name_reference}_by_${enzyme}");
   my $summary_digestion_fh=IO::File->new(">>$output_dir/digestion_summary_${name_reference}_by_${enzyme}");
+  $reduced_ratio_every_scaffold_file_fh->print("chromosome_name\toverall_rate\tin_range_rate\n");
+
   
   # Get the base-compositions of the enzyme which User inputs.
   my $enzyme_seq;
@@ -2798,7 +3376,7 @@ sub single_digest {
   my $overall_fragments_length=0;
   my $overall_fragments_in_range_length=0;
   my $overall_length_of_scfd=0;
-
+  my $total_enzyme_loci=0;
   ########## CIRCLES START HERE!###########
 
   # Process one scaffold one circle;
@@ -2962,6 +3540,7 @@ sub single_digest {
           }
         
         # Sort the array.
+        $total_enzyme_loci+=@enzyme_locs;
         @enzyme_locs=sort {$a<=>$b} @enzyme_locs;  
 
         
@@ -3203,6 +3782,7 @@ sub single_digest {
           }
         
         # Sort the array.
+        $total_enzyme_loci+=@enzyme_locs;
         @enzyme_locs=sort {$a<=>$b} @enzyme_locs;  
 
         
@@ -3294,13 +3874,12 @@ sub single_digest {
   my $num_frags_in_range=@lengths_fragments_in_range;
   my $lengths_fragments_in_range=\@lengths_fragments_in_range;
 
-
+  $summary_digestion_fh->print("loci_number_of_$enzyme\n$total_enzyme_loci\n");
   # Output the summary of digestion.
-  $summary_digestion_fh->print("Number of all fragments\t$num_all_frags\n");
-  $summary_digestion_fh->print("Number of fragments in range\t$num_frags_in_range\n");
-  $summary_digestion_fh->print("Ratio after reducing of all fragments\t$length_ratio_all_frags\n");
-  $summary_digestion_fh->print("Ratio after reducing of fragments in range\t$length_ratio_frags_in_range\n");
-
+  $summary_digestion_fh->print("all_fragments_number\tall_fragments_coverage\t");
+  $summary_digestion_fh->print("fragments_in_range_number\tfragments_in_range_coverage\n");
+  $summary_digestion_fh->print("$num_all_frags\t$length_ratio_all_frags\t");
+  $summary_digestion_fh->print("$num_frags_in_range\t$length_ratio_frags_in_range\n");
   my $lengths_distribution_start=$self->{lengths_distribution_start};
   my $lengths_distribution_end=$self->{lengths_distribution_end};
   my $lengths_distribution_step=$self->{lengths_distribution_step};
@@ -3347,7 +3926,7 @@ sub single_digest {
       
       push @starts, $tmp_start;
       push @ends, 'bigger';
-      $lengths_distribution{$num_pair}{"${tmp_start}bp-bigger bp"}=0;
+      $lengths_distribution{$num_pair}{"${tmp_start}bp-longer"}=0;
       
       }
     }
@@ -3385,7 +3964,7 @@ sub single_digest {
     }
   }
   
-  $summary_digestion_fh->print("\nLengths\' scope\tNumber of fragments in this scope\tRatio of these fragments in all\n");
+  $summary_digestion_fh->print("\nLength_range\tfragments_number\tfragments_ratio\n");
   
   for(1..@starts){
     my $num_pair=$_;
@@ -3407,7 +3986,7 @@ sub single_digest {
 =head2 add_SNPs
   
     $digest->add_SNPs(-SNPs=>'Full path of the SNPs file');
-        Adds the absolute path of the SNPs file to RestrictionDigest variable.
+        Adds the SNPs coordinate file to the object.
 =cut
 
 sub add_SNPs {
@@ -3426,7 +4005,7 @@ sub add_SNPs {
 =head2 count_SNPs_at_fragments
   
     $digest->count_SNPs_at_fragments();
-        Count the expected SNPs appeared in the framgents.
+        Count the expected SNPs located within the framgents.
 =cut
 
 sub count_SNPs_at_fragments {
@@ -3439,7 +4018,8 @@ sub count_SNPs_at_fragments {
         $self->{sequence_type}=$parameters{$_};
       }
       else{
-        die "Unacceptable parameters in the method <count_SNPs_at_fragments>, please perldoc RestrictionDigest for example or read README for more help\n";
+        die "Unacceptable parameters in the method <count_SNPs_at_fragments>, please perldoc
+        RestrictionDigest for example or read README for more help\n";
       }
     }
   }
@@ -3499,21 +4079,22 @@ sub count_SNPs_at_fragments {
   my $all_loc_file_fh=IO::File->new("$output_dir/position_frags_${name_reference}_by_${enzyme}",'r');
   my $loc_in_range_file_fh=IO::File->new("$output_dir/position_frags_in_range_${name_reference}_by_${enzyme}",'r');
   
-  # Make the file handle to the SNPs file;
+  # Store SNPs into hash.
   my $SNPs_fh=IO::File->new("$SNPs",'r');
   my %SNPs;
   while(<$SNPs_fh>){
     chomp;
     my ($SNPs_scaffold_name,$SNPs_pos,$type)=split /\s+/, $_;
-    push @{$SNPs{$SNPs_scaffold_name}}, $SNPs_pos;
+    $SNPs{$SNPs_scaffold_name}{$SNPs_pos}=1;
+    #push @{$SNPs{$SNPs_scaffold_name}}, $SNPs_pos;
   }
 
   # Create the SNPs file to hold SNPs of all fragments and fragments in range when sequencing through pair-end.
-  my($SNPs_at_all_frags_fh,$SNPs_at_frags_in_range_fh);
-  if($sequence_type_code==2){
-    $SNPs_at_all_frags_fh=IO::File->new(">>$output_dir/SNPs_at_all_frags_${name_reference}_by_${enzyme}");
-    $SNPs_at_frags_in_range_fh=IO::File->new(">>$output_dir/SNPs_at_frags_in_range_${name_reference}_by_${enzyme}");
-  }
+  #my($SNPs_at_all_frags_fh,$SNPs_at_frags_in_range_fh);
+  #if($sequence_type_code==2){
+    #$SNPs_at_all_frags_fh=IO::File->new(">>$output_dir/SNPs_at_all_frags_${name_reference}_by_${enzyme}");
+    #$SNPs_at_frags_in_range_fh=IO::File->new(">>$output_dir/SNPs_at_frags_in_range_${name_reference}_by_${enzyme}");
+  #}
 
   print "Counting SNPs at the output fragments...\t";
   # Scan all locs file to count SNPs and output the result to the summary file.
@@ -3523,38 +4104,51 @@ sub count_SNPs_at_fragments {
       chomp;
       my($fragment_name,$pos1,$pos2,$length)=split /\t/, $_;
       my $scaffold_name;
-      if($fragment_name=~/^>(.+)-(\d+)/){
+      if($fragment_name=~/^>(.+)-(\d+)$/){
         $scaffold_name=$1;
       }
       if($SNPs{$scaffold_name}){
-        for my $SNP (@{$SNPs{$scaffold_name}}){
-          if( ($SNP>=$pos1 && $SNP<=($pos1+$se_sequence_length-1)) || ( $SNP>= ($pos2-$se_sequence_length+1) && $SNP<=$pos2 ) ){
-          $all_SNPs_number++;
+        my $frag_start1=$pos1; my $frag_end1=$pos1+$se_sequence_length-1;
+        my $frag_start2=$pos2-$se_sequence_length+1; my $frag_end2=$pos2;
+        for my $frag_pos ($frag_start1..$frag_end1){
+          if($SNPs{$scaffold_name}{$frag_pos}){
+            $all_SNPs_number++;
+          }
+        }
+        for my $frag_pos ($frag_start2..$frag_end2){
+          if($SNPs{$scaffold_name}{$frag_pos}){
+            $all_SNPs_number++;
           }
         }
       }
     }
     $all_SNPs_number=int($all_SNPs_number/2);
-    $summary_digestion_fh->print("Expected SNPs at all fragments via $sequence_type:\t$all_SNPs_number\n");
+    $summary_digestion_fh->print("Expected_SNPs_at_all_fragments_via_$sequence_type:\t$all_SNPs_number\n");
   }
   elsif($sequence_type_code ==2){
     while(<$all_loc_file_fh>){
       chomp;
       my($fragment_name,$pos1,$pos2,$length)=split /\t/, $_;
       my $scaffold_name;
-      if($fragment_name=~/^>(.+)-(\d+)/){
+      if($fragment_name=~/^>(.+)-(\d+)$/){
         $scaffold_name=$1;
       }
       if($SNPs{$scaffold_name}){
-        for my $SNP (@{$SNPs{$scaffold_name}}){
-          if( ($SNP>=$pos1 && $SNP<=($pos1+$pe_sequence_length-1)) || ( $SNP>= ($pos2-$pe_sequence_length+1) && $SNP<=$pos2 ) ){
-          $all_SNPs_number++;
-          $SNPs_at_all_frags_fh->print("$scaffold_name\t$SNP\n");
+        my $frag_start1=$pos1; my $frag_end1=$pos1+$pe_sequence_length-1;
+        my $frag_start2=$pos2-$pe_sequence_length+1; my $frag_end2=$pos2;
+        for my $frag_pos ($frag_start1..$frag_end1){
+          if($SNPs{$scaffold_name}{$frag_pos}){
+            $all_SNPs_number++;
+          }
+        }
+        for my $frag_pos ($frag_start2..$frag_end2){
+          if($SNPs{$scaffold_name}{$frag_pos}){
+            $all_SNPs_number++;
           }
         }
       }
     }
-    $summary_digestion_fh->print("Expected SNPs at all fragments via $sequence_type:\t$all_SNPs_number\n");
+    $summary_digestion_fh->print("Expected_SNPs_at_all_fragments_via_$sequence_type:\t$all_SNPs_number\n");
   }
   # Scan locs in range file to count SNPs and output the result to the summary file.
 
@@ -3565,19 +4159,26 @@ sub count_SNPs_at_fragments {
       chomp;
       my($fragment_name,$pos1,$pos2,$length)=split /\t/, $_;
       my $scaffold_name;
-      if($fragment_name=~/^>(.+)-(\d+)/){
+      if($fragment_name=~/^>(.+)-(\d+)$/){
         $scaffold_name=$1;
       }
       if($SNPs{$scaffold_name}){
-        for my $SNP (@{$SNPs{$scaffold_name}}){
-          if( ($SNP>=$pos1 && $SNP<=($pos1+$se_sequence_length-1)) || ( $SNP>= ($pos2-$se_sequence_length+1) && $SNP<=$pos2 ) ){
-          $SNPs_in_range_number++;
+        my $frag_start1=$pos1; my $frag_end1=$pos1+$se_sequence_length-1;
+        my $frag_start2=$pos2-$se_sequence_length+1; my $frag_end2=$pos2;
+        for my $frag_pos ($frag_start1..$frag_end1){
+          if($SNPs{$scaffold_name}{$frag_pos}){
+            $SNPs_in_range_number++;
+          }
+        }
+        for my $frag_pos ($frag_start2..$frag_end2){
+          if($SNPs{$scaffold_name}{$frag_pos}){
+            $SNPs_in_range_number++;
           }
         }
       }
     }
     $SNPs_in_range_number=int($SNPs_in_range_number/2);
-    $summary_digestion_fh->print("Expected SNPs at fragments in range via $sequence_type:\t$SNPs_in_range_number\n");
+    $summary_digestion_fh->print("Expected_SNPs_at_fragments_in_range_via_$sequence_type:\t$SNPs_in_range_number\n");
   }
   elsif($sequence_type_code ==2){
     while(<$loc_in_range_file_fh>){
@@ -3588,15 +4189,21 @@ sub count_SNPs_at_fragments {
         $scaffold_name=$1;
       }
       if($SNPs{$scaffold_name}){
-        for my $SNP (@{$SNPs{$scaffold_name}}){
-          if( ($SNP>=$pos1 && $SNP<=($pos1+$pe_sequence_length-1)) || ( $SNP>= ($pos2-$pe_sequence_length+1) && $SNP<=$pos2 ) ){
-          $SNPs_in_range_number++;
-          $SNPs_at_frags_in_range_fh->print("$scaffold_name\t$SNP\n");
+        my $frag_start1=$pos1; my $frag_end1=$pos1+$pe_sequence_length-1;
+        my $frag_start2=$pos2-$pe_sequence_length+1; my $frag_end2=$pos2;
+        for my $frag_pos ($frag_start1..$frag_end1){
+          if($SNPs{$scaffold_name}{$frag_pos}){
+            $SNPs_in_range_number++;
+          }
+        }
+        for my $frag_pos ($frag_start2..$frag_end2){
+          if($SNPs{$scaffold_name}{$frag_pos}){
+            $SNPs_in_range_number++;
           }
         }
       }
     }
-    $summary_digestion_fh->print("Expected SNPs at fragments in range via $sequence_type:\t$SNPs_in_range_number\n");
+    $summary_digestion_fh->print("Expected_SNPs_at_fragments_in_range_via_$sequence_type:\t$SNPs_in_range_number\n");
   }
   print "Done!\n";
 }
@@ -3604,10 +4211,8 @@ sub count_SNPs_at_fragments {
 =head2 add_gff
 
     $digest->add_gff(-ref=>'Full path of the gff file');
-        Adds the absolute path of gff file to RestrictionDigest variable. 
-        If User want to calculate the coverage ratio of different genomic strutures by the digested 
-        fragments, this method is obligatory.
-        
+        Adds the Gff file to the object. 
+ 
 =cut
 
 sub add_gff { 
@@ -3618,7 +4223,8 @@ sub add_gff {
       $self->{gff}=$parameters{$_};
     }
     else{
-      die"Unacceptable parameters of the method <add_gff>, please perldoc RestrictionDigest for example or read README for more help\n";
+      die"Unacceptable parameters of the method <add_gff>, please perldoc RestrictionDigest
+      for example or read README for more help\n";
     }
   }
 }
@@ -3626,9 +4232,8 @@ sub add_gff {
 =head2 all_frags_coverage_ratio
 
      $digest->all_frags_coverage_ratio();
-          Calculate the coverage ratio of different parts of the genome reference, 
-          including mRNA, CDS, UTR and intergenic region, by all digested fragments.
-          This process will take a very long time, please be patient.  
+       Calculate the coverage ratio of different genome structures covered by all restriction fragments.
+   
 =cut
 
 sub all_frags_coverage_ratio {
@@ -3650,9 +4255,7 @@ sub all_frags_coverage_ratio {
 =head2 frags_in_range_coverage_ratio
 
      $digest->frags_in_range_coverage_ratio();
-          Calculate the coverage ratio of different parts of the genome reference, 
-          including mRNA, CDS, UTR and intergenic region, by the fragments in range.
-          This process will take a very long time, please be patient. 
+      Calculate the coverage ratio of different genome structures covered by restriction fragments in range.
 =cut
 
 sub frags_in_range_coverage_ratio {
@@ -3673,8 +4276,7 @@ sub frags_in_range_coverage_ratio {
 
 =head2  genome_structure_coverage_ratio
 
-        A subroutine invoked by the 'all_frags_coverage_ratio' and 
-        the 'frags_in_range_coverage_ratio' methods. 
+        A subroutine invoked by the 'all_frags_coverage_ratio' and the 'frags_in_range_coverage_ratio' methods. 
         User do not use this subroutine.
 
 =cut
@@ -4253,9 +4855,2736 @@ sub genome_structure_coverage_ratio {
   else{
   $all_intergenic_map_ratio=$all_intergenic_map_length/$all_intergenic_length;}
   
-  $coverage_ratio_fh->print("Intergenic region map ratio is\t$all_intergenic_map_ratio\nGenes region map ratio is\t$all_gene_map_ratio\nExon region map ratio is\t$all_exon_map_ratio\nIntron region map ratio is\t$all_intron_map_ratio\n");
+  $coverage_ratio_fh->print("Intergenic region coverage ratio is\t$all_intergenic_map_ratio\nGenes region coverage ratio is\t$all_gene_map_ratio\nExon region coverage ratio is\t$all_exon_map_ratio\nIntron region coverage ratio is\t$all_intron_map_ratio\n");
 }
 
+
+
+package RestrictionDigest::MultipleItems::Double;
+
+use 5.8.0;
+use strict;
+use warnings FATAL => 'all';
+=head1 NAME
+
+RestrictionDigest::MultipleItems::Double
+
+=head1 VERSION
+
+Version 0.01
+
+=cut
+
+our $VERSION = '0.01';
+
+
+
+=head1 SYNOPSIS
+
+RestrictionDigest::MultipleItems::Double is used for the simulation of double-enzyme digestion of multiple genomes
+at one run. 
+
+
+    use RestrictionDigest;
+
+    $digest=RestrictionDigest::MultipleItems::Double->new();
+    
+    $digest->add_refs(-ref1=>'Full path of reference 1 file', -ref2=>'Full path to reference 2 file',...,-refX=>'Full path to reference X file');
+
+    $digest->new_enzyme(-enzyme_name=>'Ncol',-recognition_site=>'C|CATGG');
+
+    $digest->add_enzyme_pair(-front_enzyme=>'EcoRI',-behind_enzyme=>'HinfI');
+
+    $digest->add_output_dir(-output_dir=>'Full path of the output directory');
+
+    $digest->change_lengths_distribution_parameters(-front=>200,-behind=>800,-step=>25);
+
+    $digest->digests_and_compare();
+
+=cut
+
+use IO::File;
+use File::Basename;
+
+use vars qw(%fields %enzyme_list);
+
+# Define the fields to be used as identifiers.
+%fields = (
+  ref1 => undef,
+  ref2 => undef,
+  ref3 => undef,
+  ref4 => undef,
+  ref5 => undef,
+  ref6 => undef,
+  ref7 => undef,
+  ref8 => undef,
+  ref9 => undef,
+  ref10 => undef,
+  ref11 => undef,
+  gff =>  undef,
+  SNPs => undef,
+  enzyme1 => undef,
+  enzyme2 =>  undef,
+  output_dir=>  undef,
+  range_start => 201,
+  range_end => 500,
+  lengths_distribution_start =>100,
+  lengths_distribution_end  => 1000,
+  lengths_distribution_step => 50,
+  sequence_type => '100PE',
+  sequence_end => 'front_enzyme',
+);
+
+# Make the endonuclease enzyme-container--a hash.
+%enzyme_list=(
+      EcoRI => 'G|AATTC',
+      HinfI => 'G|ANTC',
+      AluI => 'AG|CT',
+      AvaII => 'G|GWCC',
+      BamHI => 'G|GATCC',
+      HindIII => 'A|AGCTT',
+      MseI => 'T|TAA',
+      MspI => 'C|CGG',
+      NdeI => 'CA|TATG',
+      PstI => 'CTGCA|G',
+      SalI => 'G|TCGAC',
+      XbaI => 'T|CTAGA',
+      XhoI => 'C|TCGAG',
+      NlaIII => 'NCATG|N',
+      AatII =>  'GACGT|C',
+      AccI  =>  'GT|MKAC',
+      Acc65I  =>  'G|GTACC',
+      AciI  =>  'C|CGC',
+      AclI  => 'AA|CGTT',
+      AfeI  => 'AGC|GCT',
+      AflII   => 'C|TTAAGA',
+      AflIII  => 'A|CRYGT',
+      AgeI  => 'A|CCGGT',
+      AlwNI  => 'CAGNNN|CTG',
+      ApaI  => 'GGGCC|C',
+      ApaLI   => 'G|TGCAC',
+      ApeKI =>  'G|CWGC',
+      ApoI  => 'R|AATTY',
+      AscI  => 'GG|CGCGCC',
+      AseI => 'AT|TAAT',
+      AvaI => 'C|YCGRG',
+      BclI =>  'T|GATCA',
+      AvrII => 'C|CTAGG',
+      BaeGI => 'GKGCM|C',
+      BanI => 'G|GYRCC',
+      BanII => 'GRGCY|C',
+      BbvCI =>  'CC|TCAGC',
+      BsaAI => 'YAC|GTR',
+      BsaJI => 'C|CNNGG',
+      BsaWI => 'W|CCGGW',
+);
+
+=head1 SUBROUTINES/METHODS
+
+=head2 new
+     
+     $digest=RestrictionDigest::SingleItem::Double->new(); 
+          Create a new object.
+
+=cut
+
+sub new {
+  my $class = shift;
+  my $self = {
+    %fields,
+  };
+  bless ($self, $class);
+  return $self;
+}
+
+=head2 add_refs
+     
+     $digest->add_refs(-ref1=>'Full path of reference 1 file', -ref2=>'Full path to reference 2 file',...,-refX=>'Full path to reference X file');
+      Add the reference files to the object. 
+          
+=cut
+
+sub add_refs {
+
+  my $self=shift;
+  my %parameters=@_;
+  my $refs_count=0;
+  for my $key (keys %parameters){
+    if($key=~/^-(ref\d+)$/){
+      my $ref_code=$1;
+      unless($parameters{$key}){
+        die"No file provided for $key!\n";
+      }
+      $refs_count++;
+      $self->{$ref_code}=$parameters{$key};
+    }
+    else{
+    die "Unacceptable parameters in the method <add_ref>, please perldoc RestrictionDigest for
+    example or read README for more help!\n";
+    }
+  }
+  unless($refs_count>=2){
+    die "At least 2 references are needed for RestrictionDigest::MultipleItems\n";
+  } 
+}
+
+=head2 add_enzyme_pair
+     
+     $digest->add_enzyme_pair(-front_enzyme=>'EcoRI', -behind_enzyme=>'HinfI');
+      Add  two enzymes to the object. The names of the two enzymes are case-insensitive.
+
+=cut
+
+
+
+sub add_enzyme_pair {
+
+  my $self=shift;
+  my %parameters=@_;
+  for (keys %parameters){
+    if($_=~/^-front_enzyme$/){
+      $self->{enzyme1}=$parameters{$_};
+    }
+    elsif($_=~/^-behind_enzyme$/){
+      $self->{enzyme2}=$parameters{$_};
+    }
+    else{
+      die"Unacceptable parameters in the method <add_enzyme_pair>, please perldoc RestrictionDigest
+      for example or read README for more help!\n";
+    }
+  } 
+
+  # Check the existence of enzymes in the enzyme-container.
+  my ($enzyme1_exists, $enzyme2_exists)=qw(0 0);
+  foreach(keys %enzyme_list){
+    if($_=~/^$self->{enzyme1}$/i){
+      $enzyme1_exists++;
+    }
+    if($_=~/^$self->{enzyme2}$/i){
+      $enzyme2_exists++;
+    }
+  }
+  if($enzyme1_exists >0 ){
+    
+  }else{
+    die "The front restrict endonuclease  User provides does not exist.\nHowever User can add this
+    enzyme and its recognition sites to enzyme-container via the method 'new_enzyme' .\n";
+  }
+  if($enzyme2_exists >0 ){
+    
+  }else{
+    die "The behind restrict endonuclease  User provides does not exist.\nHowever User can add this
+    enzyme and its recognition sites to enzyme-container via the method 'new_enzyme' .\n";
+  }
+}
+
+=head2 new_enzyme
+
+     $digest->new_enzyme(-enzyme_name=>'EcoRI', -recognition_site=>'G|AATTC');
+     
+     If the enzyme User wants to use does not exists in the enzyme resevior of the module, the enzyme can be added
+     temporarily to the enzyme resevior.
+
+=cut 
+
+sub new_enzyme {
+  my $self=shift;
+  my %parameters=@_;
+  my $new_enzyme_name;
+  my $new_enzyme_site;
+  for (keys %parameters){
+    if($_=~/^-enzyme_name$/){
+      $new_enzyme_name=$parameters{$_};
+    }
+    elsif($_=~/^-recognition_site$/){
+      $new_enzyme_site=$parameters{$_};
+      unless($new_enzyme_site=~/|/){
+        die "The 'recognition_site' must contain a cut flag '|'. Please perldoc RestrictionDigest for example or read README for moer help\n";
+      }
+    }
+    else{
+      die"Unacceptable parameters in the method <new_enzyme>, please perldoc RestrictionDigest for example or read README for more help\n";
+    }
+  }
+  $enzyme_list{$new_enzyme_name}=$new_enzyme_site;
+}
+
+
+=head2 change_range
+
+     $digest->change_range(-start=>201, -end=>500);
+      This function is used to change the resolution of fragments lengths distribution. This function has three
+      parameters: front and behind define the two boundary length values, and step defines the step length.
+
+
+=cut
+
+sub change_range {
+  my $self=shift;
+  my %parameters=@_;
+  for(keys %parameters){
+    if($_=~/^-start$/){
+      $self->{range_start}=$parameters{$_};
+    }
+    elsif($_=~/^-end$/){
+      $self->{range_end}=$parameters{$_};
+    }
+    else{
+      die"Unacceptable parameters in the method <change_range>,please perldoc RestrictionDigest for example or read README for more help.\n";
+    }
+  }
+  if($self->{range_start} < $self->{range_end} ) {
+    
+  }else{
+    die "The first parameter of the method <change_range> must be smaller than the second parameter\n";
+  }
+}
+
+=head2 change_lengths_distribution_parameters
+    
+     $digest->change_lengths_distribution_parameters(-front=>100,-behind=>1000,-step=>50);
+         This function is used to change the resolution of fragments lengths distribution. This function has three
+      parameters: front and behind define the two boundary length values, and step defines the step length.
+=cut
+
+sub change_lengths_distribution_parameters {
+  my $self=shift;
+  my %parameters=@_;
+  for (keys %parameters){
+    if($_=~/^-front$/){
+      $self->{lengths_distribution_start}=$parameters{$_};    
+    }
+    elsif($_=~/^-behind$/){
+      $self->{lengths_distribution_end}=$parameters{$_};
+    }
+    elsif($_=~/^-step$/){
+      $self->{lengths_distribution_step}=$parameters{$_};
+    }
+    else{
+      die"Unacceptable parameters in the method <change_lengths_distribution_parameters>,
+      please perldoc RestrictionDigest for example or read README for more help!\n";
+    }
+  }
+}
+
+
+=head2 add_output_dir
+    
+     $digest->add_output_dir(-output_dir=>'Full path of the output directory');
+          Adds the directory into which the result files are put by the program. 
+
+=cut
+
+
+sub add_output_dir {
+  my $self=shift;
+  my %parameters=@_;
+  for(keys %parameters){
+    if($_=~/^-output_dir$/){
+      $self->{output_dir}=$parameters{$_};
+    }
+    else{
+      die "Unacceptable parameter in the method <add_output_dir>, please perldoc RestrictionDigest
+      for example or read README for more help!\n";
+    }
+  }
+  if(-d $self->{output_dir} ) {
+  }else{
+    die "The output directory User provides does not exist.\n";
+  }
+}
+
+=head2 digests_and_compare
+
+     $digest->digests_and_compare();
+          Exexute the digestions precess.
+          This process will digest all genomes/sequences inputed. Loci numbers and fragments lengths 
+          distributions will be generated.
+
+=cut
+
+sub digests_and_compare {
+
+  my $self=shift;
+  my $front_enzyme=$self->{enzyme1};
+  if($front_enzyme){
+    print "The front restrict endonuclease User provides is:\t", $front_enzyme, "\n";
+  }
+  else{
+    die"No front restrict endonuclease provided! Please perldoc RestrictionDigest for example.\n";
+  }
+  my $later_enzyme=$self->{enzyme2};
+  if($later_enzyme){
+    print "The behind restrict endonuclease User provides is:\t", $later_enzyme, "\n";
+  }
+  else{
+    die "No behind restrict endonuclease provided! Please perldoc RestrictionDigest for example.\n";
+  }
+  my $range1=$self->{range_start};
+  my $range2=$self->{range_end};
+  print "The seperate range of the fragments User wants to output is:\t$range1 to $range2 bp.\n";
+  my $output_dir=$self->{output_dir};
+  if($output_dir){
+    print "The output directory User provides is:\t",$output_dir, "\n";
+  }
+  else{
+    die "No output directory provided! Please perldoc RestrictionDigest for example.\n";
+  }
+  $output_dir=~s/^(.+)\/?$/$1/;
+
+  my %loci_lengths;
+  my @reference_names;
+  my %order;
+
+  for my $key (keys %{$self}){
+    if($key=~/^ref(\d+)$/){
+      my $ref_no=$1;
+      my $ref_genome=$self->{$key};
+      if($ref_genome){
+        $order{$ref_no}=$key;
+        my $ref_basename=basename($ref_genome);
+        print "The ${ref_no}th reference file is:\t$ref_basename\n";
+        # Process digests and store results into %loci_lengths;
+        my @refs_to_data=$self->multiple_genomes_double_digest($ref_genome);
+        $loci_lengths{$key}{loci}=shift @refs_to_data;
+        $loci_lengths{$key}{three_types}=shift @refs_to_data;
+        $loci_lengths{$key}{FB_BF}=shift @refs_to_data;
+        $loci_lengths{$key}{FF}=shift @refs_to_data;
+        $loci_lengths{$key}{BB}=shift @refs_to_data;
+      }
+    }
+  }
+  my $summary_digestion_fh=IO::File->new(">>$output_dir/digestion_summary_multiple_genomes_by_${front_enzyme}_and_${later_enzyme}");
+  print "Compare fragments lengths distributions...\t";
+
+  # Output header line which is the names of reference genomes.
+  $summary_digestion_fh->print("Number_of_enzyme_loci");
+  for my $ref_no (sort {$a<=>$b} keys %order){
+    my $key=$order{$ref_no};
+    my $ref_genome=$self->{$key};
+    my $ref_basename=basename($ref_genome);
+    $summary_digestion_fh->print("\t$ref_basename");
+  }
+  # Output front enzyme loci number.
+  $summary_digestion_fh->print("\nLoci_number_of_$front_enzyme");
+  for my $ref_no(sort {$a<=>$b} keys %order){
+    my $key=$order{$ref_no};
+    my $ref_to_loci=$loci_lengths{$key}{loci};
+    my @two_enzymes_loci_no=@{$ref_to_loci};
+    my $front_enzyme_loci=$two_enzymes_loci_no[0];
+    $summary_digestion_fh->print("\t$front_enzyme_loci");
+    
+  }
+  # Output later enzyme loci number.
+  $summary_digestion_fh->print("\nLoci_number_of_$later_enzyme");
+  for my $ref_no (sort {$a<=>$b} keys %order){
+    my $key=$order{$ref_no};
+    my $ref_to_loci=$loci_lengths{$key}{loci};
+    my @two_enzymes_loci_no=@{$ref_to_loci};
+    my $later_enzyme_loci=$two_enzymes_loci_no[1];
+    $summary_digestion_fh->print("\t$later_enzyme_loci");
+  }
+
+  # Output header of lengths distributions.
+  $summary_digestion_fh->print("\nLength_range");
+  for my $ref_no (sort {$a<=>$b} keys %order){
+    my $key=$order{$ref_no};
+    my $ref_genome=$self->{$key};
+    my $ref_basename=basename($ref_genome);
+    $summary_digestion_fh->print("\tthree_types_number_$ref_basename\tthree_types_ratio_$ref_basename");
+    $summary_digestion_fh->print("\tFB_BF_number_$ref_basename\tFB_BF_ratio_$ref_basename");
+    $summary_digestion_fh->print("\tFF_number_$ref_basename\tFF_ratio_$ref_basename");
+    $summary_digestion_fh->print("\tBB_number_$ref_basename\tBB_ratio_$ref_basename");
+  }
+  $summary_digestion_fh->print("\n");
+
+  # Parsing distribution parameters and initialize all values.
+  my $lengths_distribution_start=$self->{lengths_distribution_start};
+  my $lengths_distribution_end=$self->{lengths_distribution_end};
+  my $lengths_distribution_step=$self->{lengths_distribution_step};
+  my $lengths_distribution_tmp;
+  my (@starts,@ends,@counts,%ref_genomes_depot,%description_copy);
+
+  my $num_pair=0;
+  for($lengths_distribution_tmp= $lengths_distribution_start;$lengths_distribution_tmp<$lengths_distribution_end+$lengths_distribution_step;$lengths_distribution_tmp=$lengths_distribution_tmp+$lengths_distribution_step){
+    if($lengths_distribution_tmp== $lengths_distribution_start){
+      $num_pair++;
+      push @starts, '0';
+      push @ends , $lengths_distribution_tmp;
+
+      for my $ref_code (keys %loci_lengths){
+        $ref_genomes_depot{$ref_code}{three_types}{$num_pair}{"0bp-${lengths_distribution_tmp}bp"}=0;
+        $ref_genomes_depot{$ref_code}{FB_BF}{$num_pair}{"0bp-${lengths_distribution_tmp}bp"}=0;
+        $ref_genomes_depot{$ref_code}{FF}{$num_pair}{"0bp-${lengths_distribution_tmp}bp"}=0;
+        $ref_genomes_depot{$ref_code}{BB}{$num_pair}{"0bp-${lengths_distribution_tmp}bp"}=0;
+      }
+      $description_copy{$num_pair}="0bp-${lengths_distribution_tmp}bp";
+
+      $num_pair++;
+      my $tmp_start=$lengths_distribution_tmp+1;
+      my $tmp_end=$lengths_distribution_tmp+$lengths_distribution_step;
+      push @starts, $tmp_start;
+      push @ends, $tmp_end;
+      for my $ref_code (keys %loci_lengths){
+        $ref_genomes_depot{$ref_code}{three_types}{$num_pair}{"${tmp_start}bp-${tmp_end}bp"}=0;
+        $ref_genomes_depot{$ref_code}{FB_BF}{$num_pair}{"${tmp_start}bp-${tmp_end}bp"}=0;
+        $ref_genomes_depot{$ref_code}{FF}{$num_pair}{"${tmp_start}bp-${tmp_end}bp"}=0;
+        $ref_genomes_depot{$ref_code}{BB}{$num_pair}{"${tmp_start}bp-${tmp_end}bp"}=0;
+      }
+      $description_copy{$num_pair}="${tmp_start}bp-${tmp_end}bp";
+    }
+    elsif($lengths_distribution_tmp  < $lengths_distribution_end){
+      if($lengths_distribution_tmp+$lengths_distribution_step <$lengths_distribution_end ){
+        $num_pair++;
+        my $tmp_start=$lengths_distribution_tmp+1;
+        my $tmp_end=$lengths_distribution_tmp+$lengths_distribution_step;
+        push @starts, $tmp_start;
+        push @ends, $tmp_end;
+        for my $ref_code (keys %loci_lengths){
+          $ref_genomes_depot{$ref_code}{three_types}{$num_pair}{"${tmp_start}bp-${tmp_end}bp"}=0;
+          $ref_genomes_depot{$ref_code}{FB_BF}{$num_pair}{"${tmp_start}bp-${tmp_end}bp"}=0;
+          $ref_genomes_depot{$ref_code}{FF}{$num_pair}{"${tmp_start}bp-${tmp_end}bp"}=0;
+          $ref_genomes_depot{$ref_code}{BB}{$num_pair}{"${tmp_start}bp-${tmp_end}bp"}=0;
+        }
+        $description_copy{$num_pair}="${tmp_start}bp-${tmp_end}bp";
+      }
+      elsif($lengths_distribution_tmp +$lengths_distribution_step >= $lengths_distribution_end){
+        $num_pair++;
+        my $tmp_start=$lengths_distribution_tmp+1;
+        my $tmp_end=$lengths_distribution_end;
+
+        push @starts, $tmp_start;
+        push @ends, $tmp_end;
+
+        for my $ref_code (keys %loci_lengths){
+          $ref_genomes_depot{$ref_code}{three_types}{$num_pair}{"${tmp_start}bp-${tmp_end}bp"}=0;
+          $ref_genomes_depot{$ref_code}{FB_BF}{$num_pair}{"${tmp_start}bp-${tmp_end}bp"}=0;
+          $ref_genomes_depot{$ref_code}{FF}{$num_pair}{"${tmp_start}bp-${tmp_end}bp"}=0;
+          $ref_genomes_depot{$ref_code}{BB}{$num_pair}{"${tmp_start}bp-${tmp_end}bp"}=0;
+        }
+        $description_copy{$num_pair}="${tmp_start}bp-${tmp_end}bp";
+      
+        $num_pair++;
+        $tmp_start=$tmp_end+1;
+
+        push @starts, $tmp_start;
+        push @ends, 'bigger';
+        for my $ref_code (keys %loci_lengths){
+          $ref_genomes_depot{$ref_code}{three_types}{$num_pair}{"${tmp_start}bp-longer"}=0;
+          $ref_genomes_depot{$ref_code}{FB_BF}{$num_pair}{"${tmp_start}bp-longer"}=0;
+          $ref_genomes_depot{$ref_code}{FF}{$num_pair}{"${tmp_start}bp-longer"}=0;
+          $ref_genomes_depot{$ref_code}{BB}{$num_pair}{"${tmp_start}bp-longer"}=0;
+        }
+        $description_copy{$num_pair}="${tmp_start}bp-longer";
+      }
+    }
+  }
+
+  # Analyze the distributions of lengths of all reference genomes.
+  for my $ref_code (keys %loci_lengths){
+    for my $frag_type (keys %{$loci_lengths{$ref_code}}){
+      unless($frag_type eq "loci"){
+        my @lengths_depot=@{$loci_lengths{$ref_code}{$frag_type}};
+        for (@lengths_depot){
+          my $length=$_;
+          my $num_pair=1;
+          my $num_last_pair=@starts;
+          for($num_pair=1;$num_pair<=$num_last_pair;$num_pair++){
+            my $array_index=$num_pair-1;
+            my $start=$starts[$array_index];
+            my $end=$ends[$array_index];
+            if($num_pair<$num_last_pair){
+              if($length>=$start && $length<=$end){
+                for my $description (keys %{$ref_genomes_depot{$ref_code}{$frag_type}{$num_pair}}){
+                  $ref_genomes_depot{$ref_code}{$frag_type}{$num_pair}{$description}++;
+                  last;
+                }
+                last;
+              }
+            }
+            elsif($num_pair==$num_last_pair){
+              if($length>=$start){
+                for my $description (keys %{$ref_genomes_depot{$ref_code}{$frag_type}{$num_pair}}){
+                  $ref_genomes_depot{$ref_code}{$frag_type}{$num_pair}{$description}++;
+                  last;
+                }
+                last;
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  # Output details of lengths distributions.
+  for (1..@starts){
+    my $num_pair=$_;
+    my $description_copy=$description_copy{$num_pair};
+    $summary_digestion_fh->print("$description_copy");
+    for my $ref_no(sort {$a<=>$b} keys %order){
+      my $key=$order{$ref_no};
+      for my $description (keys %{$ref_genomes_depot{$key}{three_types}{$num_pair}}){
+        my $three_types_fragments_num=$ref_genomes_depot{$key}{three_types}{$num_pair}{$description};
+        my $FB_BF_fragments_num=$ref_genomes_depot{$key}{FB_BF}{$num_pair}{$description};
+        my $FF_fragments_num=$ref_genomes_depot{$key}{FF}{$num_pair}{$description};
+        my $BB_fragments_num=$ref_genomes_depot{$key}{BB}{$num_pair}{$description};
+        my ($three_types_ratio,$FB_BF_ratio,$FF_ratio,$BB_ratio);
+        my $three_types_count=@{$loci_lengths{$key}{three_types}};
+        my $FB_BF_count=@{$loci_lengths{$key}{FB_BF}};
+        my $FF_count=@{$loci_lengths{$key}{FF}};
+        my $BB_count=@{$loci_lengths{$key}{BB}};
+        if($three_types_count){
+          $three_types_ratio=$three_types_fragments_num/$three_types_count;
+        }else{
+          $three_types_ratio="N/A";
+        }
+        if($FB_BF_count){
+          $FB_BF_ratio=$FB_BF_fragments_num/$FB_BF_count;
+        }else{
+          $FB_BF_ratio="N/A";
+        } 
+        if($FF_count){
+          $FF_ratio=$FF_fragments_num/$FF_count;
+        }else{
+          $FF_ratio="N/A";
+        }
+        if($BB_count){
+          $BB_ratio=$BB_fragments_num/$BB_count;
+        }else{
+          $BB_ratio="N/A";
+        }
+        $summary_digestion_fh->print("\t$three_types_fragments_num\t$three_types_ratio");
+        $summary_digestion_fh->print("\t$FB_BF_fragments_num\t$FB_BF_ratio");
+        $summary_digestion_fh->print("\t$FF_fragments_num\t$FF_ratio");
+        $summary_digestion_fh->print("\t$BB_fragments_num\t$BB_ratio");
+      }
+    }
+    $summary_digestion_fh->print("\n");
+  }
+  print "Done!\n";
+  
+
+}          
+
+=head2 multiple_genomes_double_digest
+
+     $digest->multiple_genomes_double_digest();
+          A subroutine invoked by RestrictionDigest::MultipleItems::Double.
+
+=cut
+
+sub multiple_genomes_double_digest {
+  my $self=shift;
+  my $ref=shift;
+  my $front_enzyme=$self->{enzyme1};
+  my $later_enzyme=$self->{enzyme2};
+  my $range1=$self->{range_start};
+  my $range2=$self->{range_end};
+  my $output_dir=$self->{output_dir};
+  
+  $output_dir=~s/^(.+)\/?$/$1/;
+  
+  # Make the file handle to the reference file.
+  my $ref_fh=IO::File->new("$ref",'r');
+  
+  # Get the basename of reference,not include the path.
+  my $name_reference=basename($ref);
+  
+  # Get the base-compositions of these two enzymes which User inputs.
+  my ($front_seq,$later_seq);
+  foreach(keys %enzyme_list){
+    if($_=~/^$front_enzyme$/i){
+      $front_seq=$enzyme_list{$_};
+    }
+    if($_=~/^$later_enzyme$/i){
+      $later_seq=$enzyme_list{$_};
+    }
+  }
+
+  #get the relative location of cutting of the recognation sequences; $front_enzyme_cut_loc and $later_enzyme_cut_loc are two relative locations we wanted;
+  my @front_enzyme_rec_seq=split //, $front_seq;
+  my @later_enzyme_rec_seq=split //, $later_seq;
+  my @front_enzyme_cut_seq;
+  my @later_enzyme_cut_seq;
+  my $front_enzyme_rec_start=0;
+  my $later_enzyme_rec_start=0;
+  my $front_enzyme_cut_loc;
+  my $later_enzyme_cut_loc;
+  foreach(@front_enzyme_rec_seq){
+    $front_enzyme_rec_start++;
+    if($_=~/\|/){
+      $front_enzyme_cut_loc=$front_enzyme_rec_start;
+    }
+    else{
+      push @front_enzyme_cut_seq,$_;
+    }
+  }
+  foreach(@later_enzyme_rec_seq){
+    $later_enzyme_rec_start++;
+    if($_=~/\|/){
+      $later_enzyme_cut_loc=$later_enzyme_rec_start;
+    }
+    else{
+      push @later_enzyme_cut_seq, $_;
+    }
+  }
+  
+  # Replace the degenerate bases of front enzyme;
+  my $num_of_front_enzyme_cut_seq=@front_enzyme_cut_seq;
+  for(@front_enzyme_cut_seq){
+    if($_=~/N/){$_="[ATCG]";}
+    if($_=~/R/){$_="[AG]";}
+    if($_=~/Y/){$_="[CT]";}
+    if($_=~/M/){$_="[AC]";}
+    if($_=~/K/){$_="[GT]";}
+    if($_=~/S/){$_="[GC]";}
+    if($_=~/W/){$_="[AT]";}
+    if($_=~/H/){$_="[ATC]";}
+    if($_=~/B/){$_="[GTC]";}
+    if($_=~/V/){$_="[GAC]";}
+    if($_=~/D/){$_="[GAT]";}
+  }
+  my $seq_string_front_enzyme=join '', @front_enzyme_cut_seq;
+
+
+
+  # Replace the degenerate bases of later enzyme;
+  my $num_of_later_enzyme_cut_seq=@later_enzyme_cut_seq;
+  foreach(@later_enzyme_cut_seq){
+    if($_=~/N/){$_="[ATCG]";}
+    if($_=~/R/){$_="[AG]";}
+    if($_=~/Y/){$_="[CT]";}
+    if($_=~/M/){$_="[AC]";}
+    if($_=~/K/){$_="[GT]";}
+    if($_=~/S/){$_="[GC]";}
+    if($_=~/W/){$_="[AT]";}
+    if($_=~/H/){$_="[ATC]";}
+    if($_=~/B/){$_="[GTC]";}
+    if($_=~/V/){$_="[GAC]";}
+    if($_=~/D/){$_="[GAT]";}
+  }
+  my $seq_string_later_enzyme=join '', @later_enzyme_cut_seq;
+
+
+  
+  # Make the scalars and arrays used in the whole programme;
+  my $rate_overall=0;
+  my $rate_in_range=0;
+  my @lengths_of_fragments=();
+  my @lengths_of_FB_BF_fragments=();
+  my @lengths_of_FF_fragments=();
+  my @lengths_of_BB_fragments=();
+
+  my @lengths_fragments_in_range=();
+  my @lengths_FB_BF_fragments_in_range=();
+  my @lengths_FF_fragments_in_range=();
+  my @lengths_BB_fragments_in_range=();
+
+  my $overall_fragments_length=0;
+  my $overall_FB_BF_fragments_length=0;
+  my $overall_FF_fragments_length=0;
+  my $overall_BB_fragments_length=0;
+
+  my $overall_fragments_in_range_length=0;
+  my $overall_FB_BF_fragments_in_range_length=0;
+  my $overall_FF_fragments_in_range_length=0;
+  my $overall_BB_fragments_in_range_length=0;
+
+  my $overall_length_of_scfd=0;
+
+  my $total_front_enzyme_loci;
+  my $total_later_enzyme_loci;
+
+  ########## CIRCLES START HERE!###########
+
+  # Process one scaffold one circle;
+  my $seq_tmp="";
+  my $seq_name_tmp="";
+  my $scaffold_name; my $scaffold_seq;
+  print "Digesting $name_reference...\t";
+  while(<$ref_fh>){
+    chomp;
+    my $line=$_;
+    if($_=~/^>/){
+      my $seq_name=$line;
+      my $seq_name_length=length $seq_name_tmp;
+      if($seq_name_length !=0){
+        $scaffold_name=$seq_name_tmp;
+        $scaffold_seq=$seq_tmp;
+        #print"Digesting $name_reference:$scaffold_name...\t";
+        my $length_of_scafd=length $scaffold_seq;
+        
+        # Set the arrays which contain cut locations of front enzyme and later enzyme;
+        my @front_enzyme_locs=();
+        
+        my @later_enzyme_locs=();
+        
+        my $seq_for_search=$scaffold_seq;
+        # Find locs of recognition of front enzyme in this scaffold;the locs are meaningful in this array; not in the human context;
+          my $string=$seq_string_front_enzyme;
+          if($string=~/^(\w+)$/){
+            my $loc_in_array;
+            $loc_in_array=index($seq_for_search,$string);
+            unless($loc_in_array==-1){
+              push @front_enzyme_locs, $loc_in_array;
+            }
+            while($loc_in_array!=-1){
+              $loc_in_array=index($seq_for_search, $string, $loc_in_array+1);
+              unless($loc_in_array==-1){
+                push @front_enzyme_locs, $loc_in_array;
+              }
+            }
+          }
+          elsif($string=~/(\w+)\[(\w+)\](\w+)/){
+            my $breast_bases=$1;
+            my $back_bases=$3;
+            my $generate_bases=$2;
+            my @generate_bases=split //, $generate_bases;
+            my $seq_for_search=$scaffold_seq;
+            for my $one_base(@generate_bases){
+              $string=$breast_bases.$one_base.$back_bases;
+              my $loc_in_array;
+              $loc_in_array=index($seq_for_search,$string);
+              unless($loc_in_array==-1){
+                push @front_enzyme_locs, $loc_in_array;
+              }
+              while($loc_in_array!=-1){
+                $loc_in_array=index($seq_for_search, $string, $loc_in_array+1);
+                unless($loc_in_array==-1){
+                  push @front_enzyme_locs, $loc_in_array;
+                }
+              }
+            }
+          }
+
+          elsif($string=~/^\[(\w+)\](\w+)\[(\w+)\]$/){
+            my $g1_bases=$1;
+            my $middle=$2;
+            my $g2_bases=$3;
+            my @g1_bases=split //, $g1_bases;
+            my @g2_bases=split //, $g2_bases;
+            for my $one_base(@g1_bases){
+              for my $two_base(@g2_bases){
+                $string=$one_base.$middle.$two_base;
+                my $loc_in_array;
+                  $loc_in_array=index($seq_for_search,$string);
+                  unless($loc_in_array==-1){
+                    push @front_enzyme_locs, $loc_in_array;
+                  }
+                  while($loc_in_array!=-1){
+                    $loc_in_array=index($seq_for_search, $string, $loc_in_array+1);
+                    unless($loc_in_array==-1){
+                      push @front_enzyme_locs, $loc_in_array;
+                    }
+                  }                
+              }
+            }
+          }
+
+          elsif($string=~/(\w+)\[(\w+)\](\w+)\[(\w+)\](\w+)/){
+            my $breast_bases=$1;
+            my $g1_bases=$2;
+            my $middle=$3;
+            my $back_bases=$5;
+            my $g2_bases=$4;
+            my @g1_bases=split //, $g1_bases;
+            my @g2_bases=split //, $g2_bases;
+            for my $one_base(@g1_bases){
+              for my $two_base(@g2_bases){
+                $string=$breast_bases.$one_base.$middle.$two_base.$back_bases;
+                  my $loc_in_array;
+                  $loc_in_array=index($seq_for_search,$string);
+                  unless($loc_in_array==-1){
+                    push @front_enzyme_locs, $loc_in_array;
+                  }
+                  while($loc_in_array!=-1){
+                    $loc_in_array=index($seq_for_search, $string, $loc_in_array+1);
+                    unless($loc_in_array==-1){
+                      push @front_enzyme_locs, $loc_in_array;
+                    }
+                  }
+              }
+            }
+          }
+          elsif($string=~/(\w+)\[(\w+)\]\[(\w+)\]\[(\w+)\](\w+)/){
+            my $breast_bases=$1;
+            my $g1_bases=$2;
+            my $g2_bases=$3;
+            my $back_bases=$5;
+            my $g3_bases=$4;
+            my @g1_bases=split //, $g1_bases;
+            my @g2_bases=split //, $g2_bases;
+            my @g3_bases=split //, $g3_bases;
+            for my $one_base(@g1_bases){
+              for my $two_base(@g2_bases){
+                for my $three_base(@g3_bases){
+                  $string=$breast_bases.$one_base.$two_base.$three_base.$back_bases;
+                    my $loc_in_array;
+                    $loc_in_array=index($seq_for_search,$string);
+                    unless($loc_in_array==-1){
+                      push @front_enzyme_locs, $loc_in_array;
+                    }
+                    while($loc_in_array!=-1){
+                      $loc_in_array=index($seq_for_search, $string, $loc_in_array+1);
+                      unless($loc_in_array==-1){
+                        push @front_enzyme_locs, $loc_in_array;
+                      }
+                    }
+                }
+              }
+            }
+          }
+          elsif($string=~/(\w+)\[(\w+)\]\[(\w+)\](\w+)/){
+            my $breast_bases=$1;
+            my $g1_bases=$2;
+            my $g2_bases=$3;
+            my $back_bases=$4;
+            my @g1_bases=split //, $g1_bases;
+            my @g2_bases=split //, $g2_bases;
+            for my $one_base(@g1_bases){
+              for my $two_base(@g2_bases){
+                  $string=$breast_bases.$one_base.$two_base.$back_bases;
+                    my $loc_in_array;
+                    $loc_in_array=index($seq_for_search,$string);
+                    unless($loc_in_array==-1){
+                      push @front_enzyme_locs, $loc_in_array;
+                    }
+                    while($loc_in_array!=-1){
+                      $loc_in_array=index($seq_for_search, $string, $loc_in_array+1);
+                      unless($loc_in_array==-1){
+                        push @front_enzyme_locs, $loc_in_array;
+                      }
+                    }
+              }
+            }
+          }
+    
+        # Find locs of recognition of later enzyme in this scaffold;the locs are meaningful in this array; not in the human context;
+   
+          $string=$seq_string_later_enzyme;
+          if($string=~/^(\w+)$/){
+            my $loc_in_array;
+            $loc_in_array=index($seq_for_search,$string);
+            unless($loc_in_array==-1){
+              push @later_enzyme_locs, $loc_in_array;
+            }
+            while($loc_in_array!=-1){
+              $loc_in_array=index($seq_for_search, $string, $loc_in_array+1);
+              unless($loc_in_array==-1){
+                push @later_enzyme_locs, $loc_in_array;
+              }
+            }
+          }
+          elsif($string=~/(\w+)\[(\w+)\](\w+)/){
+            my $breast_bases=$1;
+            my $back_bases=$3;
+            my $generate_bases=$2;
+            my @generate_bases=split //, $generate_bases;
+            for my $one_base(@generate_bases){
+              $string=$breast_bases.$one_base.$back_bases;
+                my $loc_in_array;
+                $loc_in_array=index($seq_for_search,$string);
+                unless($loc_in_array==-1){
+                  push @later_enzyme_locs, $loc_in_array;
+                }
+                while($loc_in_array!=-1){
+                  $loc_in_array=index($seq_for_search, $string, $loc_in_array+1);
+                  unless($loc_in_array==-1){
+                    push @later_enzyme_locs, $loc_in_array;
+                  }
+                }
+            }
+          }
+
+          elsif($string=~/^\[(\w+)\](\w+)\[(\w+)\]$/){
+            my $g1_bases=$1;
+            my $middle=$2;
+            my $g2_bases=$3;
+            my @g1_bases=split //, $g1_bases;
+            my @g2_bases=split //, $g2_bases;
+            for my $one_base(@g1_bases){
+              for my $two_base(@g2_bases){
+                $string=$one_base.$middle.$two_base;
+                  my $loc_in_array;
+                  $loc_in_array=index($seq_for_search,$string);
+                  unless($loc_in_array==-1){
+                    push @later_enzyme_locs, $loc_in_array;
+                  }
+                  while($loc_in_array!=-1){
+                    $loc_in_array=index($seq_for_search, $string, $loc_in_array+1);
+                    unless($loc_in_array==-1){
+                      push @later_enzyme_locs, $loc_in_array;
+                    }
+                  }
+              }
+            }
+          }
+
+          elsif($string=~/(\w+)\[(\w+)\](\w+)\[(\w+)\](\w+)/){
+            my $breast_bases=$1;
+            my $g1_bases=$2;
+            my $middle=$3;
+            my $back_bases=$5;
+            my $g2_bases=$4;
+            my @g1_bases=split //, $g1_bases;
+            my @g2_bases=split //, $g2_bases;
+            for my $one_base(@g1_bases){
+              for my $two_base(@g2_bases){
+                $string=$breast_bases.$one_base.$middle.$two_base.$back_bases;
+                  my $loc_in_array;
+                  $loc_in_array=index($seq_for_search,$string);
+                  unless($loc_in_array==-1){
+                    push @later_enzyme_locs, $loc_in_array;
+                  }
+                  while($loc_in_array!=-1){
+                    $loc_in_array=index($seq_for_search, $string, $loc_in_array+1);
+                    unless($loc_in_array==-1){
+                      push @later_enzyme_locs, $loc_in_array;
+                    }
+                  }
+              }
+            }
+          }
+          elsif($string=~/(\w+)\[(\w+)\]\[(\w+)\]\[(\w+)\](\w+)/){
+            my $breast_bases=$1;
+            my $g1_bases=$2;
+            my $g2_bases=$3;
+            my $back_bases=$5;
+            my $g3_bases=$4;
+            my @g1_bases=split //, $g1_bases;
+            my @g2_bases=split //, $g2_bases;
+            my @g3_bases=split //, $g3_bases;
+            for my $one_base(@g1_bases){
+              for my $two_base(@g2_bases){
+                for my $three_base(@g3_bases){
+                  $string=$breast_bases.$one_base.$two_base.$three_base.$back_bases;
+                    my $loc_in_array;
+                    $loc_in_array=index($seq_for_search,$string);
+                    unless($loc_in_array==-1){
+                      push @later_enzyme_locs, $loc_in_array;
+                    }
+                    while($loc_in_array!=-1){
+                      $loc_in_array=index($seq_for_search, $string, $loc_in_array+1);
+                      unless($loc_in_array==-1){
+                        push @later_enzyme_locs, $loc_in_array;
+                      }
+                    }
+                }
+              }
+            }
+          }
+          elsif($string=~/(\w+)\[(\w+)\]\[(\w+)\](\w+)/){
+            my $breast_bases=$1;
+            my $g1_bases=$2;
+            my $g2_bases=$3;
+            my $back_bases=$4;
+            my @g1_bases=split //, $g1_bases;
+            my @g2_bases=split //, $g2_bases;
+            for my $one_base(@g1_bases){
+              for my $two_base(@g2_bases){
+                  $string=$breast_bases.$one_base.$two_base.$back_bases;
+                    my $loc_in_array;
+                    $loc_in_array=index($seq_for_search,$string);
+                    unless($loc_in_array==-1){
+                      push @later_enzyme_locs, $loc_in_array;
+                    }
+                    while($loc_in_array!=-1){
+                      $loc_in_array=index($seq_for_search, $string, $loc_in_array+1);
+                      unless($loc_in_array==-1){
+                        push @later_enzyme_locs, $loc_in_array;
+                      }
+                   }
+              }
+            }
+          }
+     
+        # Count all enzymes loci of the genome.
+        $total_front_enzyme_loci+=@front_enzyme_locs;
+        $total_later_enzyme_loci+=@later_enzyme_locs;
+
+        # Integrate the front enzyme locs and later enzyme locs into a hash;
+        my %hash;
+        while(@front_enzyme_locs){
+          my $loc=shift @front_enzyme_locs;
+          $hash{$loc}=$front_enzyme;
+        }
+        while(@later_enzyme_locs){
+          my $loc=shift @later_enzyme_locs;
+          $hash{$loc}=$later_enzyme;
+        }
+        
+        # Sort the locs by the locations of them and restore the fragments' locs with different ends.
+        my @locs_sorted=sort{$a<=>$b} keys %hash;
+
+        # Three types of fragments: FB_BF, FF, BB (F for Front_enzyme and B for Behind_enzyme)
+        my ($length_FB_BF_fragments,$length_FF_fragments,$length_BB_fragments,$length_FB_BF_fragments_in_range)=qw(0 0 0 0);
+        my ($length_FF_fragments_in_range, $length_BB_fragments_in_range)=qw(0 0);
+        my ($count_all,$count_in_range,$count_FB_BF,$count_FF,$count_BB,$count_FB_BF_in_range,$count_FF_in_range,$count_BB_in_range)=qw(0 0 0 0 0 0 0 0);
+        my ($before_cut_coorr,$after_cut_coorr,$bf_ct_crr_hm_rd,$af_ct_crr_hm_rd);
+
+        my (@FB_BF_locs_before, @FB_BF_enzyme_before, @FB_BF_locs_after, @FB_BF_enzyme_after);
+        my (@FF_locs_before,  @FF_locs_after,@BB_locs_before, @BB_locs_after);
+        my ($after_loc,$enzyme_before, $enzyme_after);
+        my $before_loc=shift @locs_sorted;
+
+        while(@locs_sorted){
+          $after_loc=shift @locs_sorted;
+          $enzyme_before=$hash{$before_loc};
+          $enzyme_after=$hash{$after_loc};
+          unless($enzyme_before eq $enzyme_after){
+            push @FB_BF_locs_before, $before_loc;
+            push @FB_BF_enzyme_before, $enzyme_before;
+            push @FB_BF_locs_after,$after_loc;
+            push @FB_BF_enzyme_after, $enzyme_after;
+            my $length_of_FB_BF_fragment=0; my $seq_FB_BF;
+            $count_all++; $count_FB_BF++;
+            if($front_enzyme=~/$enzyme_before/i){
+              $before_cut_coorr=$before_loc+$front_enzyme_cut_loc-1;
+              $after_cut_coorr=$after_loc+$later_enzyme_cut_loc-2;
+              $length_of_FB_BF_fragment=$after_cut_coorr-$before_cut_coorr+1;
+              $seq_FB_BF=substr($scaffold_seq, $before_cut_coorr, $length_of_FB_BF_fragment);   
+            }
+            elsif($later_enzyme=~/$enzyme_before/i){
+                $before_cut_coorr=$before_loc+$later_enzyme_cut_loc-1;
+                $after_cut_coorr=$after_loc+$front_enzyme_cut_loc-2;
+                $length_of_FB_BF_fragment=$after_cut_coorr-$before_cut_coorr+1;
+                $seq_FB_BF=substr($scaffold_seq, $before_cut_coorr, $length_of_FB_BF_fragment);
+            }
+
+            my $bf_ct_crr=$before_cut_coorr+1; my $af_ct_crr=$after_cut_coorr+1;
+
+            # Output the sequence and fragment positions of all_length_FB_BF fragments to files;
+            #$all_FB_BF_seq_file_fh->print("$scaffold_name-$count_all\n$seq_FB_BF\n");
+            my $strand;
+            if($enzyme_before=~/$front_enzyme/i){$strand="+";}
+            elsif($enzyme_before=~/$later_enzyme/i){$strand="-";}
+            #$all_FB_BF_loc_file_fh->print("$scaffold_name-$count_all\t$strand\t$enzyme_before\t$bf_ct_crr\t$enzyme_after\t$af_ct_crr\t$length_of_FB_BF_fragment\n");
+            push @lengths_of_fragments, $length_of_FB_BF_fragment;
+            push @lengths_of_FB_BF_fragments, $length_of_FB_BF_fragment; 
+
+            # Process fragments in range. 
+            if($length_of_FB_BF_fragment >= $range1 && $length_of_FB_BF_fragment <= $range2){
+              $count_in_range++;
+              $count_FB_BF_in_range++;
+              #$seq_FB_BF_in_range_file_fh->print("$scaffold_name-$count_all\n$seq_FB_BF\n");
+              #$loc_FB_BF_in_range_file_fh->print("$scaffold_name-$count_all\t$strand\t$enzyme_before\t$bf_ct_crr\t$enzyme_after\t$af_ct_crr\t$length_of_FB_BF_fragment\n");
+              push @lengths_fragments_in_range, $length_of_FB_BF_fragment;
+              push @lengths_FB_BF_fragments_in_range, $length_of_FB_BF_fragment;
+        
+              $length_FB_BF_fragments_in_range+=$length_of_FB_BF_fragment;              
+            }
+
+            # Sum all fragments length no matter in range or not!!!
+            
+            $length_FB_BF_fragments+=$length_of_FB_BF_fragment;
+          }elsif($enzyme_before eq $front_enzyme){
+            push @FF_locs_before, $before_loc;
+            push @FF_locs_after, $after_loc;
+            my $length_of_FF_fragment=0; my $seq_FF;
+            $count_all++; $count_FF++;
+            $before_cut_coorr=$before_loc+$front_enzyme_cut_loc-1;
+            $after_cut_coorr=$after_loc+$front_enzyme_cut_loc-2;
+            $length_of_FF_fragment=$after_cut_coorr-$before_cut_coorr+1;
+            $seq_FF=substr($scaffold_seq, $before_cut_coorr, $length_of_FF_fragment);
+            my $bf_ct_crr=$before_cut_coorr+1; my $af_ct_crr=$after_cut_coorr+1;
+            # Output the sequence and fragment positions of all_length_FF fragments to files;
+            #$all_FF_seq_file_fh->print("$scaffold_name-$count_all\n$seq_FF\n");
+            my $strand="+";
+            #$all_FF_loc_file_fh->print("$scaffold_name-$count_all\t$strand\t$front_enzyme\t$bf_ct_crr\t$front_enzyme\t$af_ct_crr\t$length_of_FF_fragment\n");
+            push @lengths_of_fragments, $length_of_FF_fragment;
+            push @lengths_of_FF_fragments, $length_of_FF_fragment;
+
+            # Process fragments in range.
+            if($length_of_FF_fragment >= $range1 && $length_of_FF_fragment <= $range2){
+              $count_in_range++;
+              $count_FF_in_range++;
+              #$seq_FF_in_range_file_fh->print("$scaffold_name-$count_all\n$seq_FF\n");
+              #$loc_FF_in_range_file_fh->print("$scaffold_name-$count_all\t$strand\t$front_enzyme\t$bf_ct_crr\t$front_enzyme\t$af_ct_crr\t$length_of_FF_fragment\n");
+              push @lengths_fragments_in_range, $length_of_FF_fragment;
+              push @lengths_FF_fragments_in_range, $length_of_FF_fragment;
+             
+              $length_FF_fragments_in_range+=$length_of_FF_fragment;              
+            }
+            # Sum all fragments length no matter in range or not!!!
+            
+            $length_FF_fragments+=$length_of_FF_fragment;
+
+          }elsif($enzyme_before eq $later_enzyme){
+            push @BB_locs_before, $before_loc;
+            push @BB_locs_after, $after_loc;
+            my $length_of_BB_fragment=0; my $seq_BB;
+            $count_all++; $count_BB++;
+            $before_cut_coorr=$before_loc+$later_enzyme_cut_loc-1;
+            $after_cut_coorr=$after_loc+$later_enzyme_cut_loc-2;
+            $length_of_BB_fragment=$after_cut_coorr-$before_cut_coorr+1;
+            $seq_BB=substr($scaffold_seq, $before_cut_coorr, $length_of_BB_fragment);
+            my $bf_ct_crr=$before_cut_coorr+1; my $af_ct_crr=$after_cut_coorr+1;
+            # Output the sequence and fragment positions of all_length_FF fragments to files;
+            #$all_BB_seq_file_fh->print("$scaffold_name-$count_all\n$seq_BB\n");
+            my $strand="+";
+            #$all_BB_loc_file_fh->print("$scaffold_name-$count_all\t$strand\t$later_enzyme\t$bf_ct_crr\t$later_enzyme\t$af_ct_crr\t$length_of_BB_fragment\n");
+            push @lengths_of_fragments, $length_of_BB_fragment;
+            push @lengths_of_BB_fragments, $length_of_BB_fragment;
+
+            # Process fragments in range.
+            if($length_of_BB_fragment >= $range1 && $length_of_BB_fragment <= $range2){
+              $count_in_range++;
+              $count_BB_in_range++;
+              #$seq_BB_in_range_file_fh->print("$scaffold_name-$count_all\n$seq_BB\n");
+              #$loc_BB_in_range_file_fh->print("$scaffold_name-$count_all\t$strand\t$later_enzyme\t$bf_ct_crr\t$later_enzyme\t$af_ct_crr\t$length_of_BB_fragment\n");
+              push @lengths_fragments_in_range, $length_of_BB_fragment;
+              push @lengths_BB_fragments_in_range, $length_of_BB_fragment;
+              
+              $length_BB_fragments_in_range+=$length_of_BB_fragment;              
+            }
+            # Sum all fragments length no matter in range or not!!!
+          
+            $length_BB_fragments+=$length_of_BB_fragment;
+
+          }
+          $before_loc=$after_loc;
+        }
+
+        # Calculate reduced rate of three types of fragments on this chromosome.
+        my $all_type_length_overall=$length_FB_BF_fragments+$length_FF_fragments+$length_BB_fragments;
+        my $all_type_length_in_range=$length_FB_BF_fragments_in_range+$length_FF_fragments_in_range+$length_BB_fragments_in_range;
+        my $all_type_overall_rate=$all_type_length_overall/$length_of_scafd;
+        my $all_type_in_range_rate=$all_type_length_in_range/$length_of_scafd;
+        my $FB_BF_overall_rate=$length_FB_BF_fragments/$length_of_scafd;
+        my $FB_BF_in_range_rate=$length_FB_BF_fragments_in_range/$length_of_scafd;
+        my $FF_overall_rate=$length_FF_fragments/$length_of_scafd;
+        my $FF_in_range_rate=$length_FF_fragments_in_range/$length_of_scafd;
+        my $BB_overall_rate=$length_BB_fragments/$length_of_scafd;
+        my $BB_in_range_rate=$length_BB_fragments_in_range/$length_of_scafd;
+
+        $overall_fragments_length+=$all_type_length_overall;
+        $overall_fragments_in_range_length+=$all_type_length_in_range;
+        $overall_length_of_scfd+=$length_of_scafd;
+
+        $overall_FB_BF_fragments_length+=$length_FB_BF_fragments;
+        $overall_FF_fragments_length+=$length_FF_fragments;
+        $overall_BB_fragments_length+=$length_BB_fragments;
+
+        $overall_FB_BF_fragments_in_range_length+=$length_FB_BF_fragments_in_range;
+        $overall_FF_fragments_in_range_length+=$length_FF_fragments_in_range;
+        $overall_BB_fragments_in_range_length+=$length_BB_fragments_in_range;
+
+        #$reduced_ratio_every_chromosome_file_fh->print("$all_type_overall_rate\t$all_type_in_range_rate\t$FB_BF_overall_rate\t$FB_BF_in_range_rate\t");
+        #$reduced_ratio_every_chromosome_file_fh->print("$FF_overall_rate\t$FF_in_range_rate\t$BB_overall_rate\t$BB_in_range_rate\n");
+        #print"Done!\n";
+      }
+      $seq_name_tmp=$seq_name;
+      $seq_tmp="";
+    }else{
+      $seq_tmp=$seq_tmp.$line;
+    }
+    if(eof($ref_fh)){
+      $scaffold_name=$seq_name_tmp;
+      $scaffold_seq=$seq_tmp;
+        #print"Digesting $name_reference:$scaffold_name...\t";
+        #$reduced_ratio_every_chromosome_file_fh->print("$scaffold_name\t");
+        my $length_of_scafd=length $scaffold_seq;
+        
+        # Set the arrays which contain cut locations of front enzyme and later enzyme;
+        my @front_enzyme_locs=();
+        
+        my @later_enzyme_locs=();
+        
+        my $seq_for_search=$scaffold_seq;
+        # Find locs of recognition of front enzyme in this scaffold;the locs are meaningful in this array; not in the human context;
+          my $string=$seq_string_front_enzyme;
+          if($string=~/^(\w+)$/){
+            my $loc_in_array;
+            $loc_in_array=index($seq_for_search,$string);
+            unless($loc_in_array==-1){
+              push @front_enzyme_locs, $loc_in_array;
+            }
+            while($loc_in_array!=-1){
+              $loc_in_array=index($seq_for_search, $string, $loc_in_array+1);
+              unless($loc_in_array==-1){
+                push @front_enzyme_locs, $loc_in_array;
+              }
+            }
+          }
+          elsif($string=~/(\w+)\[(\w+)\](\w+)/){
+            my $breast_bases=$1;
+            my $back_bases=$3;
+            my $generate_bases=$2;
+            my @generate_bases=split //, $generate_bases;
+            my $seq_for_search=$scaffold_seq;
+            for my $one_base(@generate_bases){
+              $string=$breast_bases.$one_base.$back_bases;
+              my $loc_in_array;
+              $loc_in_array=index($seq_for_search,$string);
+              unless($loc_in_array==-1){
+                push @front_enzyme_locs, $loc_in_array;
+              }
+              while($loc_in_array!=-1){
+                $loc_in_array=index($seq_for_search, $string, $loc_in_array+1);
+                unless($loc_in_array==-1){
+                  push @front_enzyme_locs, $loc_in_array;
+                }
+              }
+            }
+          }
+
+          elsif($string=~/^\[(\w+)\](\w+)\[(\w+)\]$/){
+            my $g1_bases=$1;
+            my $middle=$2;
+            my $g2_bases=$3;
+            my @g1_bases=split //, $g1_bases;
+            my @g2_bases=split //, $g2_bases;
+            for my $one_base(@g1_bases){
+              for my $two_base(@g2_bases){
+                $string=$one_base.$middle.$two_base;
+                my $loc_in_array;
+                  $loc_in_array=index($seq_for_search,$string);
+                  unless($loc_in_array==-1){
+                    push @front_enzyme_locs, $loc_in_array;
+                  }
+                  while($loc_in_array!=-1){
+                    $loc_in_array=index($seq_for_search, $string, $loc_in_array+1);
+                    unless($loc_in_array==-1){
+                      push @front_enzyme_locs, $loc_in_array;
+                    }
+                  }                
+              }
+            }
+          }
+
+          elsif($string=~/(\w+)\[(\w+)\](\w+)\[(\w+)\](\w+)/){
+            my $breast_bases=$1;
+            my $g1_bases=$2;
+            my $middle=$3;
+            my $back_bases=$5;
+            my $g2_bases=$4;
+            my @g1_bases=split //, $g1_bases;
+            my @g2_bases=split //, $g2_bases;
+            for my $one_base(@g1_bases){
+              for my $two_base(@g2_bases){
+                $string=$breast_bases.$one_base.$middle.$two_base.$back_bases;
+                  my $loc_in_array;
+                  $loc_in_array=index($seq_for_search,$string);
+                  unless($loc_in_array==-1){
+                    push @front_enzyme_locs, $loc_in_array;
+                  }
+                  while($loc_in_array!=-1){
+                    $loc_in_array=index($seq_for_search, $string, $loc_in_array+1);
+                    unless($loc_in_array==-1){
+                      push @front_enzyme_locs, $loc_in_array;
+                    }
+                  }
+              }
+            }
+          }
+          elsif($string=~/(\w+)\[(\w+)\]\[(\w+)\]\[(\w+)\](\w+)/){
+            my $breast_bases=$1;
+            my $g1_bases=$2;
+            my $g2_bases=$3;
+            my $back_bases=$5;
+            my $g3_bases=$4;
+            my @g1_bases=split //, $g1_bases;
+            my @g2_bases=split //, $g2_bases;
+            my @g3_bases=split //, $g3_bases;
+            for my $one_base(@g1_bases){
+              for my $two_base(@g2_bases){
+                for my $three_base(@g3_bases){
+                  $string=$breast_bases.$one_base.$two_base.$three_base.$back_bases;
+                    my $loc_in_array;
+                    $loc_in_array=index($seq_for_search,$string);
+                    unless($loc_in_array==-1){
+                      push @front_enzyme_locs, $loc_in_array;
+                    }
+                    while($loc_in_array!=-1){
+                      $loc_in_array=index($seq_for_search, $string, $loc_in_array+1);
+                      unless($loc_in_array==-1){
+                        push @front_enzyme_locs, $loc_in_array;
+                      }
+                    }
+                }
+              }
+            }
+          }
+          elsif($string=~/(\w+)\[(\w+)\]\[(\w+)\](\w+)/){
+            my $breast_bases=$1;
+            my $g1_bases=$2;
+            my $g2_bases=$3;
+            my $back_bases=$4;
+            my @g1_bases=split //, $g1_bases;
+            my @g2_bases=split //, $g2_bases;
+            for my $one_base(@g1_bases){
+              for my $two_base(@g2_bases){
+                  $string=$breast_bases.$one_base.$two_base.$back_bases;
+                    my $loc_in_array;
+                    $loc_in_array=index($seq_for_search,$string);
+                    unless($loc_in_array==-1){
+                      push @front_enzyme_locs, $loc_in_array;
+                    }
+                    while($loc_in_array!=-1){
+                      $loc_in_array=index($seq_for_search, $string, $loc_in_array+1);
+                      unless($loc_in_array==-1){
+                        push @front_enzyme_locs, $loc_in_array;
+                      }
+                    }
+              }
+            }
+          }
+        
+  
+        
+        
+        # Find locs of recognition of later enzyme in this scaffold;the locs are meaningful in this array; not in the human context;
+   
+          $string=$seq_string_later_enzyme;
+          if($string=~/^(\w+)$/){
+            my $loc_in_array;
+            $loc_in_array=index($seq_for_search,$string);
+            unless($loc_in_array==-1){
+              push @later_enzyme_locs, $loc_in_array;
+            }
+            while($loc_in_array!=-1){
+              $loc_in_array=index($seq_for_search, $string, $loc_in_array+1);
+              unless($loc_in_array==-1){
+                push @later_enzyme_locs, $loc_in_array;
+              }
+            }
+          }
+          elsif($string=~/(\w+)\[(\w+)\](\w+)/){
+            my $breast_bases=$1;
+            my $back_bases=$3;
+            my $generate_bases=$2;
+            my @generate_bases=split //, $generate_bases;
+            for my $one_base(@generate_bases){
+              $string=$breast_bases.$one_base.$back_bases;
+                my $loc_in_array;
+                $loc_in_array=index($seq_for_search,$string);
+                unless($loc_in_array==-1){
+                  push @later_enzyme_locs, $loc_in_array;
+                }
+                while($loc_in_array!=-1){
+                  $loc_in_array=index($seq_for_search, $string, $loc_in_array+1);
+                  unless($loc_in_array==-1){
+                    push @later_enzyme_locs, $loc_in_array;
+                  }
+                }
+            }
+          }
+
+          elsif($string=~/^\[(\w+)\](\w+)\[(\w+)\]$/){
+            my $g1_bases=$1;
+            my $middle=$2;
+            my $g2_bases=$3;
+            my @g1_bases=split //, $g1_bases;
+            my @g2_bases=split //, $g2_bases;
+            for my $one_base(@g1_bases){
+              for my $two_base(@g2_bases){
+                $string=$one_base.$middle.$two_base;
+                  my $loc_in_array;
+                  $loc_in_array=index($seq_for_search,$string);
+                  unless($loc_in_array==-1){
+                    push @later_enzyme_locs, $loc_in_array;
+                  }
+                  while($loc_in_array!=-1){
+                    $loc_in_array=index($seq_for_search, $string, $loc_in_array+1);
+                    unless($loc_in_array==-1){
+                      push @later_enzyme_locs, $loc_in_array;
+                    }
+                  }
+              }
+            }
+          }
+
+          elsif($string=~/(\w+)\[(\w+)\](\w+)\[(\w+)\](\w+)/){
+            my $breast_bases=$1;
+            my $g1_bases=$2;
+            my $middle=$3;
+            my $back_bases=$5;
+            my $g2_bases=$4;
+            my @g1_bases=split //, $g1_bases;
+            my @g2_bases=split //, $g2_bases;
+            for my $one_base(@g1_bases){
+              for my $two_base(@g2_bases){
+                $string=$breast_bases.$one_base.$middle.$two_base.$back_bases;
+                  my $loc_in_array;
+                  $loc_in_array=index($seq_for_search,$string);
+                  unless($loc_in_array==-1){
+                    push @later_enzyme_locs, $loc_in_array;
+                  }
+                  while($loc_in_array!=-1){
+                    $loc_in_array=index($seq_for_search, $string, $loc_in_array+1);
+                    unless($loc_in_array==-1){
+                      push @later_enzyme_locs, $loc_in_array;
+                    }
+                  }
+              }
+            }
+          }
+          elsif($string=~/(\w+)\[(\w+)\]\[(\w+)\]\[(\w+)\](\w+)/){
+            my $breast_bases=$1;
+            my $g1_bases=$2;
+            my $g2_bases=$3;
+            my $back_bases=$5;
+            my $g3_bases=$4;
+            my @g1_bases=split //, $g1_bases;
+            my @g2_bases=split //, $g2_bases;
+            my @g3_bases=split //, $g3_bases;
+            for my $one_base(@g1_bases){
+              for my $two_base(@g2_bases){
+                for my $three_base(@g3_bases){
+                  $string=$breast_bases.$one_base.$two_base.$three_base.$back_bases;
+                    my $loc_in_array;
+                    $loc_in_array=index($seq_for_search,$string);
+                    unless($loc_in_array==-1){
+                      push @later_enzyme_locs, $loc_in_array;
+                    }
+                    while($loc_in_array!=-1){
+                      $loc_in_array=index($seq_for_search, $string, $loc_in_array+1);
+                      unless($loc_in_array==-1){
+                        push @later_enzyme_locs, $loc_in_array;
+                      }
+                    }
+                }
+              }
+            }
+          }
+          elsif($string=~/(\w+)\[(\w+)\]\[(\w+)\](\w+)/){
+            my $breast_bases=$1;
+            my $g1_bases=$2;
+            my $g2_bases=$3;
+            my $back_bases=$4;
+            my @g1_bases=split //, $g1_bases;
+            my @g2_bases=split //, $g2_bases;
+            for my $one_base(@g1_bases){
+              for my $two_base(@g2_bases){
+                  $string=$breast_bases.$one_base.$two_base.$back_bases;
+                    my $loc_in_array;
+                    $loc_in_array=index($seq_for_search,$string);
+                    unless($loc_in_array==-1){
+                      push @later_enzyme_locs, $loc_in_array;
+                    }
+                    while($loc_in_array!=-1){
+                      $loc_in_array=index($seq_for_search, $string, $loc_in_array+1);
+                      unless($loc_in_array==-1){
+                        push @later_enzyme_locs, $loc_in_array;
+                      }
+                   }
+              }
+            }
+          }
+
+        
+        # Count all enzymes loci of the genome.
+        $total_front_enzyme_loci+=@front_enzyme_locs;
+        $total_later_enzyme_loci+=@later_enzyme_locs;
+     
+        # Integrate the front enzyme locs and later enzyme locs into a hash;
+        my %hash;
+        while(@front_enzyme_locs){
+          my $loc=shift @front_enzyme_locs;
+          $hash{$loc}=$front_enzyme;
+        }
+
+        while(@later_enzyme_locs){
+          my $loc=shift @later_enzyme_locs;
+          $hash{$loc}=$later_enzyme;
+        }
+        
+        # Sort the locs by the locations of them and restore the fragments' locs with different ends.
+        my @locs_sorted=sort{$a<=>$b} keys %hash;
+        
+
+        # Three types of fragments: FB_BF, FF, BB (F for Front_enzyme and B for Behind_enzyme)
+        my ($length_FB_BF_fragments,$length_FF_fragments,$length_BB_fragments,$length_FB_BF_fragments_in_range)=qw(0 0 0 0);
+        my ($length_FF_fragments_in_range, $length_BB_fragments_in_range)=qw(0 0);
+        my ($count_all,$count_in_range,$count_FB_BF,$count_FF,$count_BB,$count_FB_BF_in_range,$count_FF_in_range,$count_BB_in_range)=qw(0 0 0 0 0 0 0 0);
+        my ($before_cut_coorr,$after_cut_coorr,$bf_ct_crr_hm_rd,$af_ct_crr_hm_rd);
+
+        my (@FB_BF_locs_before, @FB_BF_enzyme_before, @FB_BF_locs_after, @FB_BF_enzyme_after);
+        my (@FF_locs_before,  @FF_locs_after,@BB_locs_before, @BB_locs_after);
+        my ($after_loc,$enzyme_before, $enzyme_after);
+        my $before_loc=shift @locs_sorted;
+
+        while(@locs_sorted){
+          $after_loc=shift @locs_sorted;
+          $enzyme_before=$hash{$before_loc};
+          $enzyme_after=$hash{$after_loc};
+          unless($enzyme_before eq $enzyme_after){
+            push @FB_BF_locs_before, $before_loc;
+            push @FB_BF_enzyme_before, $enzyme_before;
+            push @FB_BF_locs_after,$after_loc;
+            push @FB_BF_enzyme_after, $enzyme_after;
+            my $length_of_FB_BF_fragment=0; my $seq_FB_BF;
+            $count_all++; $count_FB_BF++;
+            if($front_enzyme=~/$enzyme_before/i){
+              $before_cut_coorr=$before_loc+$front_enzyme_cut_loc-1;
+              $after_cut_coorr=$after_loc+$later_enzyme_cut_loc-2;
+              $length_of_FB_BF_fragment=$after_cut_coorr-$before_cut_coorr+1;
+              $seq_FB_BF=substr($scaffold_seq, $before_cut_coorr, $length_of_FB_BF_fragment);   
+            }
+            elsif($later_enzyme=~/$enzyme_before/i){
+                $before_cut_coorr=$before_loc+$later_enzyme_cut_loc-1;
+                $after_cut_coorr=$after_loc+$front_enzyme_cut_loc-2;
+                $length_of_FB_BF_fragment=$after_cut_coorr-$before_cut_coorr+1;
+                $seq_FB_BF=substr($scaffold_seq, $before_cut_coorr, $length_of_FB_BF_fragment);
+            }
+
+            my $bf_ct_crr=$before_cut_coorr+1; my $af_ct_crr=$after_cut_coorr+1;
+
+            # Output the sequence and fragment positions of all_length_FB_BF fragments to files;
+            #$all_FB_BF_seq_file_fh->print("$scaffold_name-$count_all\n$seq_FB_BF\n");
+            my $strand;
+            if($enzyme_before=~/$front_enzyme/i){$strand="+";}
+            elsif($enzyme_before=~/$later_enzyme/i){$strand="-";}
+            #$all_FB_BF_loc_file_fh->print("$scaffold_name-$count_all\t$strand\t$enzyme_before\t$bf_ct_crr\t$enzyme_after\t$af_ct_crr\t$length_of_FB_BF_fragment\n");
+            push @lengths_of_fragments, $length_of_FB_BF_fragment;
+            push @lengths_of_FB_BF_fragments, $length_of_FB_BF_fragment; 
+
+            # Process fragments in range. 
+            if($length_of_FB_BF_fragment >= $range1 && $length_of_FB_BF_fragment <= $range2){
+              $count_in_range++;
+              $count_FB_BF_in_range++;
+              #$seq_FB_BF_in_range_file_fh->print("$scaffold_name-$count_all\n$seq_FB_BF\n");
+              #$loc_FB_BF_in_range_file_fh->print("$scaffold_name-$count_all\t$strand\t$enzyme_before\t$bf_ct_crr\t$enzyme_after\t$af_ct_crr\t$length_of_FB_BF_fragment\n");
+              push @lengths_fragments_in_range, $length_of_FB_BF_fragment;
+              push @lengths_FB_BF_fragments_in_range, $length_of_FB_BF_fragment;
+              
+              $length_FB_BF_fragments_in_range+=$length_of_FB_BF_fragment;              
+            }
+
+            # Sum all fragments length no matter in range or not!!!
+            
+            $length_FB_BF_fragments+=$length_of_FB_BF_fragment;
+          }elsif($enzyme_before eq $front_enzyme){
+            push @FF_locs_before, $before_loc;
+            push @FF_locs_after, $after_loc;
+            my $length_of_FF_fragment=0; my $seq_FF;
+            $count_all++; $count_FF++;
+            $before_cut_coorr=$before_loc+$front_enzyme_cut_loc-1;
+            $after_cut_coorr=$after_loc+$front_enzyme_cut_loc-2;
+            $length_of_FF_fragment=$after_cut_coorr-$before_cut_coorr+1;
+            $seq_FF=substr($scaffold_seq, $before_cut_coorr, $length_of_FF_fragment);
+            my $bf_ct_crr=$before_cut_coorr+1; my $af_ct_crr=$after_cut_coorr+1;
+            # Output the sequence and fragment positions of all_length_FF fragments to files;
+            #$all_FF_seq_file_fh->print("$scaffold_name-$count_all\n$seq_FF\n");
+            my $strand="+";
+            #$all_FF_loc_file_fh->print("$scaffold_name-$count_all\t$strand\t$front_enzyme\t$bf_ct_crr\t$front_enzyme\t$af_ct_crr\t$length_of_FF_fragment\n");
+            push @lengths_of_fragments, $length_of_FF_fragment;
+            push @lengths_of_FF_fragments, $length_of_FF_fragment;
+
+            # Process fragments in range.
+            if($length_of_FF_fragment >= $range1 && $length_of_FF_fragment <= $range2){
+              $count_in_range++;
+              $count_FF_in_range++;
+              #$seq_FF_in_range_file_fh->print("$scaffold_name-$count_all\n$seq_FF\n");
+              #$loc_FF_in_range_file_fh->print("$scaffold_name-$count_all\t$strand\t$front_enzyme\t$bf_ct_crr\t$front_enzyme\t$af_ct_crr\t$length_of_FF_fragment\n");
+              push @lengths_fragments_in_range, $length_of_FF_fragment;
+              push @lengths_FF_fragments_in_range, $length_of_FF_fragment;
+           
+              $length_FF_fragments_in_range+=$length_of_FF_fragment;              
+            }
+            # Sum all fragments length no matter in range or not!!!
+            
+            $length_FF_fragments+=$length_of_FF_fragment;
+
+          }elsif($enzyme_before eq $later_enzyme){
+            push @BB_locs_before, $before_loc;
+            push @BB_locs_after, $after_loc;
+            my $length_of_BB_fragment=0; my $seq_BB;
+            $count_all++; $count_BB++;
+            $before_cut_coorr=$before_loc+$later_enzyme_cut_loc-1;
+            $after_cut_coorr=$after_loc+$later_enzyme_cut_loc-2;
+            $length_of_BB_fragment=$after_cut_coorr-$before_cut_coorr+1;
+            $seq_BB=substr($scaffold_seq, $before_cut_coorr, $length_of_BB_fragment);
+            my $bf_ct_crr=$before_cut_coorr+1; my $af_ct_crr=$after_cut_coorr+1;
+            # Output the sequence and fragment positions of all_length_FF fragments to files;
+            #$all_BB_seq_file_fh->print("$scaffold_name-$count_all\n$seq_BB\n");
+            my $strand="+";
+            #$all_BB_loc_file_fh->print("$scaffold_name-$count_all\t$strand\t$later_enzyme\t$bf_ct_crr\t$later_enzyme\t$af_ct_crr\t$length_of_BB_fragment\n");
+            push @lengths_of_fragments, $length_of_BB_fragment;
+            push @lengths_of_BB_fragments, $length_of_BB_fragment;
+
+            # Process fragments in range.
+            if($length_of_BB_fragment >= $range1 && $length_of_BB_fragment <= $range2){
+              $count_in_range++;
+              $count_BB_in_range++;
+              #$seq_BB_in_range_file_fh->print("$scaffold_name-$count_all\n$seq_BB\n");
+              #$loc_BB_in_range_file_fh->print("$scaffold_name-$count_all\t$strand\t$later_enzyme\t$bf_ct_crr\t$later_enzyme\t$af_ct_crr\t$length_of_BB_fragment\n");
+              push @lengths_fragments_in_range, $length_of_BB_fragment;
+              push @lengths_BB_fragments_in_range, $length_of_BB_fragment;
+             
+              $length_BB_fragments_in_range+=$length_of_BB_fragment;              
+            }
+            # Sum all fragments length no matter in range or not!!!
+           
+            $length_BB_fragments+=$length_of_BB_fragment;
+
+          }
+          $before_loc=$after_loc;
+        }
+        #print"Done!\n";
+    }
+  }
+  print "Done!\n";
+  my @two_enzymes_loci_no=($total_front_enzyme_loci,$total_later_enzyme_loci);
+  return (\@two_enzymes_loci_no, \@lengths_of_fragments, \@lengths_of_FB_BF_fragments, \@lengths_of_FF_fragments,\@lengths_of_BB_fragments);
+}
+
+
+
+package RestrictionDigest::MultipleItems::Single;
+
+use 5.8.0;
+use strict;
+use warnings FATAL => 'all';
+
+=head1 NAME
+
+
+RestrictionDigest::MultipleItems::Single
+=head1 VERSION
+
+Version 0.01
+
+=cut
+
+our $VERSION = '0.01';
+
+
+
+=head1 SYNOPSIS
+
+RestrictionDigest::MultipleItems::Single is used for the simulation of single-enzyme digestion of multiple genomes.
+
+    use RestrictionDigest;
+
+    $digest=RestrictionDigest::MultipleItems::Single->new();
+    
+    $digest->add_refs(-ref1=>'Full path of reference 1 file', -ref2=>'Full path to reference 2 file',...,-refX=>'Full path to reference X file');
+
+    $digest->new_enzyme(-enzyme_name=>'Ncol',-recognition_site=>'C|CATGG');
+
+    $digest->add_enzyme_pair(-front_enzyme=>'EcoRI',-behind_enzyme=>'HinfI');
+
+    $digest->add_output_dir(-output_dir=>'Full path of the output directory');
+
+    $digest->change_lengths_distribution_parameters(-front=>200,-behind=>800,-step=>25);
+
+    $digest->digests_and_compare();
+
+=cut
+
+use IO::File;
+use File::Basename;
+
+use vars qw(%fields %enzyme_list);
+
+# Define the fields to be used as identifiers.
+%fields = (
+  ref1 => undef,
+  ref2 => undef,
+  ref3 => undef,
+  ref4 => undef,
+  ref5 => undef,
+  ref6 => undef,
+  ref7 => undef,
+  ref8 => undef,
+  ref9 => undef,
+  ref10 => undef,
+  ref11 => undef,
+  gff =>  undef,
+  SNPs => undef,
+  enzyme => undef,
+  output_dir=>  undef,
+  range_start => 201,
+  range_end => 500,
+  sequence_type => '100PE',
+  lengths_distribution_start =>100,
+  lengths_distribution_end  => 1000,
+  lengths_distribution_step => 50,
+);
+
+# Make the endonuclease enzyme-container--a hash.
+%enzyme_list=(
+      EcoRI => 'G|AATTC',
+      HinfI => 'G|ANTC',
+      AluI => 'AG|CT',
+      AvaII => 'G|GWCC',
+      BamHI => 'G|GATCC',
+      HindIII => 'A|AGCTT',
+      MseI => 'T|TAA',
+      MspI => 'C|CGG',
+      NdeI => 'CA|TATG',
+      PstI => 'CTGCA|G',
+      SalI => 'G|TCGAC',
+      XbaI => 'T|CTAGA',
+      XhoI => 'C|TCGAG',
+      NlaIII => 'NCATG|N',
+      AatII =>  'GACGT|C',
+      AccI  =>  'GT|MKAC',
+      Acc65I  =>  'G|GTACC',
+      AciI  =>  'C|CGC',
+      AclI  => 'AA|CGTT',
+      AfeI  => 'AGC|GCT',
+      AflII   => 'C|TTAAGA',
+      AflIII  => 'A|CRYGT',
+      AgeI  => 'A|CCGGT',
+      AlwNI  => 'CAGNNN|CTG',
+      ApaI  => 'GGGCC|C',
+      ApaLI   => 'G|TGCAC',
+      ApeKI =>  'G|CWGC',
+      ApoI  => 'R|AATTY',
+      AscI  => 'GG|CGCGCC',
+      AseI => 'AT|TAAT',
+      AvaI => 'C|YCGRG',
+      BclI =>  'T|GATCA',
+      AvrII => 'C|CTAGG',
+      BaeGI => 'GKGCM|C',
+      BanI => 'G|GYRCC',
+      BanII => 'GRGCY|C',
+      BbvCI =>  'CC|TCAGC',
+      BsaAI => 'YAC|GTR',
+      BsaJI => 'C|CNNGG',
+      BsaWI => 'W|CCGGW',
+);
+
+=head1 SUBROUTINES/METHODS
+
+=head2 new
+     
+     $digest=RestrictionDigest::Single->new(); 
+          Create a new object.
+
+=cut
+
+sub new {
+  my $class = shift;
+  my $self = {
+    %fields,
+  };
+  bless ($self, $class);
+  return $self;
+}
+
+=head2 add_ref
+     
+     $digest->add_refs(-ref1=>'Full path of reference 1 file', -ref2=>'Full path to reference 2 file',...,-refX=>'Full path to reference X file');
+      Add the reference files to the object.
+
+=cut
+
+sub add_refs {
+
+  my $self=shift;
+  my %parameters=@_;
+  my $refs_count=0;
+  for my $key (keys %parameters){
+    if($key=~/^-(ref\d+)$/){
+      my $ref_code=$1;
+      unless($parameters{$key}){
+        die"No file provided for $key!\n";
+      }
+      $refs_count++;
+      $self->{$ref_code}=$parameters{$key};
+    }
+    else{
+    die "Unacceptable parameters in the method <add_ref>, please perldoc RestrictionDigest for example or read README for more help!\n";
+    }
+  }
+  unless($refs_count>=2){
+    die "At least 2 references are needed for RestrictionDigest::MultipleItems\n";
+  } 
+}
+
+=head2 add_single_enzyme
+     
+     $digest->add_single_enzyme(-enzyme=>'EcoRI');
+          Add the single enzyme to the object.
+          
+=cut
+
+
+sub add_single_enzyme {
+  my $self=shift;
+  my %parameters=@_;
+  for (keys %parameters){
+    if($_=~/^-enzyme$/){
+      $self->{enzyme}=$parameters{$_};
+    }
+    else{
+      die"Unacceptable parameters in the method <add_singel_enzyme>, please perldoc RestrictionDigest for example or read README for more help!\n";
+    }
+  }
+  
+  # Check the existence of enzymes in the enzyme-container.
+  my $enzyme_exists=0;
+  foreach(keys %enzyme_list){
+    if($_=~/^$self->{enzyme}$/i){
+      $enzyme_exists++;
+    }
+  }
+  if($enzyme_exists >0 ){
+  }else{
+    die "The single restrict endonuclease  User provides does not exist.\nHowever User can add this enzyme and its recognition sites to enzyme-container via the method 'new_enzyme'.\n";
+  }
+}
+
+=head2 new_enzyme
+
+     $digest->new_enzyme(-enzyme_name=>'EcoRI', -recognition_site=>'G|AATTC');
+     
+     If the enzyme User wants to use does not exists in the enzyme resevior of the module, the enzyme can be added
+     temporarily to the enzyme resevior.
+
+
+=cut
+
+sub new_enzyme {
+  my $self=shift;
+  my %parameters=@_;
+  my $new_enzyme_name;
+  my $new_enzyme_site;
+  for (keys %parameters){
+    if($_=~/^-enzyme_name$/){
+      $new_enzyme_name=$parameters{$_};
+    }
+    elsif($_=~/^-recognition_site$/){
+      $new_enzyme_site=$parameters{$_};
+      unless($new_enzyme_site=~/|/){
+        die "The 'recognition_site' must contain a cut flag '|'. Please perldoc RestrictionDigest for example or read README for moer help\n";
+      }
+    }
+    else{
+      die"Unacceptable parameters in the method <new_enzyme>, please perldoc RestrictionDigest for example or read README for more help\n";
+    }
+  }
+  $enzyme_list{$new_enzyme_name}=$new_enzyme_site;
+}
+
+=head2 change_range
+
+     $digest->change_range(-start=>201, -end=>500);
+        This function is used to change the resolution of fragments lengths distribution. This function has three
+      parameters: front and behind define the two boundary length values, and step defines the step length.
+=cut
+
+sub change_range {
+  my $self=shift;
+  my %parameters=@_;
+  for(keys %parameters){
+    if($_=~/^-start$/){
+      $self->{range_start}=$parameters{$_};
+    }
+    elsif($_=~/^-end$/){
+      $self->{range_end}=$parameters{$_};
+    }
+    else{
+      die"Unacceptable parameters in the method <change_range>,please perldoc RestrictionDigest for example or read README for more help.\n";
+    }
+  }
+  if($self->{range_start} < $self->{range_end} ) {
+  }else{
+    die "The first parameter of the method <change_range> must be smaller than the second parameter\n";
+  }
+}
+
+=head2 change_lengths_distribution_parameters
+    
+     $digest->change_lengths_distribution_parameters(-front=>100,-behind=>1000,-step=>50);
+        This function is used to change the resolution of fragments lengths distribution. This function has three
+      parameters: front and behind define the two boundary length values, and step defines the step length.
+=cut
+
+sub change_lengths_distribution_parameters {
+  my $self=shift;
+  my %parameters=@_;
+  for (keys %parameters){
+    if($_=~/^-front$/){
+      $self->{lengths_distribution_start}=$parameters{$_};    
+    }
+    elsif($_=~/^-behind$/){
+      $self->{lengths_distribution_end}=$parameters{$_};
+    }
+    elsif($_=~/^-step$/){
+      $self->{lengths_distribution_step}=$parameters{$_};
+    }
+    else{
+      die"Unacceptable parameters in the method <change_lengths_distribution_parameters>, please perldoc RestrictionDigest for example or read README for more help!\n";
+    }
+  }
+}
+
+
+
+=head2 add_output_dir
+    
+     $digest->add_output_dir(-output_dir=>'Full path of the output directory');
+          Adds the directory into which the result files are put by the program. 
+
+=cut
+
+sub add_output_dir {
+  my $self=shift;
+  my %parameters=@_;
+  for(keys %parameters){
+    if($_=~/^-output_dir$/){
+      $self->{output_dir}=$parameters{$_};
+    }
+    else{
+      die "Unacceptable parameter in the method <add_output_dir>, please perldoc RestrictionDigest for example or read README for more help!\n";
+    }
+  }
+  if(-d $self->{output_dir} ) {
+  }else{
+    die "The output directory User provides does not exist.\n";
+  }
+}
+
+=head2 digests_and_compare
+
+     $digest->digests_and_compare();
+          Exexute the digestions precess.
+          This process will digest all genomes/sequences inputed. Loci numbers and fragments lengths 
+          distributions will be generated.
+
+=cut
+
+sub digests_and_compare {
+
+  my $self=shift;
+  my $enzyme=$self->{enzyme};
+  if($enzyme){
+    print "The restrict endonuclease User provides is:\t", $enzyme, "\n";
+  }
+  else{
+    die"No restrict endonuclease provided! Please perldoc RestrictionDigest for example.\n";
+  }
+  my $range1=$self->{range_start};
+  my $range2=$self->{range_end};
+  print "The seperate range of the fragments User wants to output is:\t$range1 to $range2 bp.\n";
+  my $output_dir=$self->{output_dir};
+  if($output_dir){
+    print "The output directory User provides is:\t",$output_dir, "\n";
+  }
+  else{
+    die "No output directory provided! Please perldoc RestrictionDigest for example.\n";
+  }
+  $output_dir=~s/^(.+)\/?$/$1/;
+
+  my %loci_lengths;
+  my @reference_names;
+  my %order;
+
+  for my $key (keys %{$self}){
+    if($key=~/^ref(\d+)$/){
+      my $ref_no=$1;
+      my $ref_genome=$self->{$key};
+      if($ref_genome){
+        $order{$ref_no}=$key;
+        my $ref_basename=basename($ref_genome);
+        print "The ${ref_no}th reference file is:\t$ref_basename\n";
+        # Process digests and store results into %loci_lengths;
+
+        my @refs_to_data=$self->multiple_genomes_single_digest($ref_genome);
+
+        $loci_lengths{$key}{loci}=shift @refs_to_data;
+        $loci_lengths{$key}{lengths}=shift @refs_to_data;
+      }
+    }
+  }
+
+  my $summary_digestion_fh=IO::File->new(">>$output_dir/digestion_summary_multiple_genomes_by_$enzyme");
+  print "Compare fragments lengths distributions...\t";
+
+  # Output header line which is the names of reference genomes.
+  $summary_digestion_fh->print("Number_of_enzyme_loci");
+  for my $ref_no (sort {$a<=>$b} keys %order){
+    my $key=$order{$ref_no};
+    my $ref_genome=$self->{$key};
+    my $ref_basename=basename($ref_genome);
+    $summary_digestion_fh->print("\t$ref_basename");
+  }
+  # Output enzyme loci number.
+  $summary_digestion_fh->print("\nLoci_number_of_$enzyme");
+  for my $ref_no(sort {$a<=>$b} keys %order){
+    my $key=$order{$ref_no};
+    my $enzyme_loci=$loci_lengths{$key}{loci};
+    $summary_digestion_fh->print("\t$enzyme_loci");
+  }
+  
+  # Output header of lengths distributions.
+  $summary_digestion_fh->print("\nLength_range");
+  for my $ref_no (sort {$a<=>$b} keys %order){
+    my $key=$order{$ref_no};
+    my $ref_genome=$self->{$key};
+    my $ref_basename=basename($ref_genome);
+    $summary_digestion_fh->print("\tfragments_number_$ref_basename\tfragments_ratio_$ref_basename");
+  }
+  $summary_digestion_fh->print("\n");
+
+  # Parsing distribution parameters and initialize all values.
+  my $lengths_distribution_start=$self->{lengths_distribution_start};
+  my $lengths_distribution_end=$self->{lengths_distribution_end};
+  my $lengths_distribution_step=$self->{lengths_distribution_step};
+  my $lengths_distribution_tmp;
+  my (@starts,@ends,@counts,%ref_genomes_depot,%description_copy);
+  my $num_pair=0;
+  for($lengths_distribution_tmp= $lengths_distribution_start;$lengths_distribution_tmp<$lengths_distribution_end+$lengths_distribution_step;$lengths_distribution_tmp=$lengths_distribution_tmp+$lengths_distribution_step){
+    if($lengths_distribution_tmp== $lengths_distribution_start){
+      $num_pair++;
+      push @starts, '0';
+      push @ends , $lengths_distribution_tmp;
+      for my $ref_code (keys %loci_lengths){
+        $ref_genomes_depot{$ref_code}{lengths}{$num_pair}{"0bp-${lengths_distribution_tmp}bp"}=0;
+      }
+      $description_copy{$num_pair}="0bp-${lengths_distribution_tmp}bp";
+
+      $num_pair++;
+      my $tmp_start=$lengths_distribution_tmp+1;
+      my $tmp_end=$lengths_distribution_tmp+$lengths_distribution_step;
+      push @starts, $tmp_start;
+      push @ends, $tmp_end;
+      for my $ref_code (keys %loci_lengths){
+        $ref_genomes_depot{$ref_code}{lengths}{$num_pair}{"${tmp_start}bp-${tmp_end}bp"}=0;
+      }
+      $description_copy{$num_pair}="${tmp_start}bp-${tmp_end}bp";
+    }
+    elsif($lengths_distribution_tmp  < $lengths_distribution_end){
+      if($lengths_distribution_tmp+$lengths_distribution_step <$lengths_distribution_end ){
+        $num_pair++;
+        my $tmp_start=$lengths_distribution_tmp+1;
+        my $tmp_end=$lengths_distribution_tmp+$lengths_distribution_step;
+        push @starts, $tmp_start;
+        push @ends, $tmp_end;
+        for my $ref_code (keys %loci_lengths){
+          $ref_genomes_depot{$ref_code}{lengths}{$num_pair}{"${tmp_start}bp-${tmp_end}bp"}=0;
+        }
+        $description_copy{$num_pair}="${tmp_start}bp-${tmp_end}bp";
+      }
+      elsif($lengths_distribution_tmp +$lengths_distribution_step >= $lengths_distribution_end){
+        $num_pair++;
+        my $tmp_start=$lengths_distribution_tmp+1;
+        my $tmp_end=$lengths_distribution_end;
+        push @starts, $tmp_start;
+        push @ends, $tmp_end;
+        for my $ref_code (keys %loci_lengths){
+          $ref_genomes_depot{$ref_code}{lengths}{$num_pair}{"${tmp_start}bp-${tmp_end}bp"}=0;
+        }
+        $description_copy{$num_pair}="${tmp_start}bp-${tmp_end}bp";
+        $num_pair++;
+        $tmp_start=$tmp_end+1;
+        push @starts, $tmp_start;
+        push @ends, 'bigger';
+        for my $ref_code (keys %loci_lengths){
+          $ref_genomes_depot{$ref_code}{lengths}{$num_pair}{"${tmp_start}bp-longer"}=0;
+        }
+        $description_copy{$num_pair}="${tmp_start}bp-longer"; 
+      }
+    }
+  }
+  # Analyze the distributions of lengths of all reference genomes.
+  for my $ref_code (keys %loci_lengths){
+    for my $frag_type (keys %{$loci_lengths{$ref_code}}){
+      unless($frag_type eq "loci"){
+        my @lengths_depot=@{$loci_lengths{$ref_code}{$frag_type}};
+        for (@lengths_depot){
+          my $length=$_;
+          my $num_pair=1;
+          my $num_last_pair=@starts;
+          for($num_pair=1;$num_pair<=$num_last_pair;$num_pair++){
+            my $array_index=$num_pair-1;
+            my $start=$starts[$array_index];
+            my $end=$ends[$array_index];
+            if($num_pair<$num_last_pair){
+              if($length>=$start && $length<=$end){
+                for my $description (keys %{$ref_genomes_depot{$ref_code}{$frag_type}{$num_pair}}){
+                  $ref_genomes_depot{$ref_code}{$frag_type}{$num_pair}{$description}++;
+                  last;
+                }
+                last;
+              }
+            }
+            elsif($num_pair==$num_last_pair){
+              if($length>=$start){
+                for my $description (keys %{$ref_genomes_depot{$ref_code}{$frag_type}{$num_pair}}){
+                  $ref_genomes_depot{$ref_code}{$frag_type}{$num_pair}{$description}++;
+                  last;
+                }
+                last;
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  # Output details of lengths distributions.
+  for (1..@starts){
+    my $num_pair=$_;
+    my $description_copy=$description_copy{$num_pair};
+    $summary_digestion_fh->print("$description_copy");
+    for my $ref_no(sort {$a<=>$b} keys %order){
+      my $key=$order{$ref_no};
+      for my $description (keys %{$ref_genomes_depot{$key}{lengths}{$num_pair}}){
+        my $fragments_num=$ref_genomes_depot{$key}{lengths}{$num_pair}{$description};
+        my ($fragments_ratio);
+        my $fragments_count=@{$loci_lengths{$key}{lengths}};
+        if($fragments_count){
+          $fragments_ratio=$fragments_num/$fragments_count;
+        }
+        else{
+          $fragments_ratio="N/A";
+        }
+        $summary_digestion_fh->print("\t$fragments_num\t$fragments_ratio");
+      }
+    }
+    $summary_digestion_fh->print("\n");
+  }
+  print "Done!\n";
+}
+
+  
+
+=head2 multiple_genomes_single_digest
+
+     A subroutine invoked by RestricitonDigest::MultipleItems::Single;
+
+=cut
+
+sub multiple_genomes_single_digest {
+
+  my $self=shift;
+  my $ref=shift;
+  my $enzyme=$self->{enzyme};
+  my $range1=$self->{range_start};
+  my $range2=$self->{range_end};
+  my $output_dir=$self->{output_dir};
+
+  $output_dir=~s/^(.+)\/?$/$1/;
+  
+  # Make the file handle to the reference file.
+  my $ref_fh=IO::File->new("$ref",'r');
+  
+  # Get the basename of reference,not include the path.
+  my $name_reference=basename($ref);
+  
+  # Get the base-compositions of the enzyme which User inputs.
+  my $enzyme_seq;
+  foreach(keys %enzyme_list){
+    if($_=~/^$enzyme$/i){
+      $enzyme_seq=$enzyme_list{$_};
+    }
+  }
+
+  #get the relative location of cutting of the recognation sequences;
+  my @enzyme_rec_seq=split //, $enzyme_seq;
+  my @enzyme_cut_seq;
+  my $enzyme_rec_start=0;
+  my $enzyme_cut_loc;
+  
+  foreach(@enzyme_rec_seq){
+    $enzyme_rec_start++;
+    if($_=~/\|/){
+      $enzyme_cut_loc=$enzyme_rec_start;
+    }
+    else{
+      push @enzyme_cut_seq,$_;
+    }
+  }
+  
+  # Replace the degenerate bases of the enzyme;
+  my $num_of_enzyme_cut_seq=@enzyme_cut_seq;
+  for(@enzyme_cut_seq){
+    if($_=~/N/){$_="[ATCG]";}
+    if($_=~/R/){$_="[AG]";}
+    if($_=~/Y/){$_="[CT]";}
+    if($_=~/M/){$_="[AC]";}
+    if($_=~/K/){$_="[GT]";}
+    if($_=~/S/){$_="[GC]";}
+    if($_=~/W/){$_="[AT]";}
+    if($_=~/H/){$_="[ATC]";}
+    if($_=~/B/){$_="[GTC]";}
+    if($_=~/V/){$_="[GAC]";}
+    if($_=~/D/){$_="[GAT]";}
+  }
+  my $seq_string_enzyme=join '', @enzyme_cut_seq;
+
+
+  
+  # Make the scalars and arrays used in the whole programme;
+  my $rate_overall=0;
+  my $rate_in_range=0;
+  my @lengths_of_fragments=();
+  my @lengths_fragments_in_range=();
+  my $overall_fragments_length=0;
+  my $overall_fragments_in_range_length=0;
+  my $overall_length_of_scfd=0;
+
+  my $total_enzyme_loci=0;
+
+  ########## CIRCLES START HERE!###########
+
+  # Process one scaffold one circle;
+  my $seq_tmp="";
+  my $seq_name_tmp="";
+  my ($scaffold_name, $scaffold_seq);
+  print"Digesting $name_reference...\t";
+  
+  while(<$ref_fh>){
+    chomp;
+    my $line=$_;
+
+    if($_=~/^>/){
+      my $seq_name=$line;
+      my $seq_name_length=length $seq_name_tmp;
+      
+      if($seq_name_length !=0){
+        $scaffold_name=$seq_name_tmp;
+        $scaffold_seq=$seq_tmp;
+
+        my $length_of_scafd=length $scaffold_seq;
+        # Set the array which contains cut locations of the enzyme.
+        my @enzyme_locs=();
+        # Find locs of recognition of the enzyme in this scaffold;the locs are meaningful in this array; not in the human context; 
+        my $seq_for_search=$scaffold_seq;
+        my $string=$seq_string_enzyme;
+        # Find the recognition sites of this enzyme in this scaffold.
+        if($string=~/^(\w+)$/){
+          my $loc_in_array;
+          $loc_in_array=index($seq_for_search,$string);
+          unless($loc_in_array==-1){
+            push @enzyme_locs, $loc_in_array;
+          }
+          while($loc_in_array!=-1){
+            $loc_in_array=index($seq_for_search, $string, $loc_in_array+1);
+            unless($loc_in_array==-1){
+              push @enzyme_locs, $loc_in_array;
+            }
+          }
+        }
+        elsif($string=~/(\w+)\[(\w+)\](\w+)/){
+          my $breast_bases=$1;
+          my $back_bases=$3;
+          my $generate_bases=$2;
+          my @generate_bases=split //, $generate_bases;
+          my $seq_for_search=$scaffold_seq;
+          for my $one_base(@generate_bases){
+            $string=$breast_bases.$one_base.$back_bases;
+            my $loc_in_array;
+            $loc_in_array=index($seq_for_search,$string);
+            unless($loc_in_array==-1){
+              push @enzyme_locs, $loc_in_array;
+            }
+            while($loc_in_array!=-1){
+              $loc_in_array=index($seq_for_search, $string, $loc_in_array+1);
+              unless($loc_in_array==-1){
+                push @enzyme_locs, $loc_in_array;
+              }
+            }
+          }
+        }
+
+        elsif($string=~/^\[(\w+)\](\w+)\[(\w+)\]$/){
+          my $g1_bases=$1;
+          my $middle=$2;
+          my $g2_bases=$3;
+          my @g1_bases=split //, $g1_bases;
+          my @g2_bases=split //, $g2_bases;
+          for my $one_base(@g1_bases){
+            for my $two_base(@g2_bases){
+              $string=$one_base.$middle.$two_base;
+              my $loc_in_array;
+              $loc_in_array=index($seq_for_search,$string);
+              unless($loc_in_array==-1){
+                push @enzyme_locs, $loc_in_array;
+              }
+              while($loc_in_array!=-1){
+                $loc_in_array=index($seq_for_search, $string, $loc_in_array+1);
+                unless($loc_in_array==-1){
+                  push @enzyme_locs, $loc_in_array;
+                }
+              }                
+            }
+          }
+        }
+
+        elsif($string=~/(\w+)\[(\w+)\](\w+)\[(\w+)\](\w+)/){
+          my $breast_bases=$1;
+          my $g1_bases=$2;
+          my $middle=$3;
+          my $back_bases=$5;
+          my $g2_bases=$4;
+          my @g1_bases=split //, $g1_bases;
+          my @g2_bases=split //, $g2_bases;
+          for my $one_base(@g1_bases){
+            for my $two_base(@g2_bases){
+              $string=$breast_bases.$one_base.$middle.$two_base.$back_bases;
+              my $loc_in_array;
+              $loc_in_array=index($seq_for_search,$string);
+              unless($loc_in_array==-1){
+                push @enzyme_locs, $loc_in_array;
+              }
+              while($loc_in_array!=-1){
+                $loc_in_array=index($seq_for_search, $string, $loc_in_array+1);
+                unless($loc_in_array==-1){
+                  push @enzyme_locs, $loc_in_array;
+                }
+              }
+            }
+          }
+        }
+        elsif($string=~/(\w+)\[(\w+)\]\[(\w+)\]\[(\w+)\](\w+)/){
+          my $breast_bases=$1;
+          my $g1_bases=$2;
+          my $g2_bases=$3;
+          my $back_bases=$5;
+          my $g3_bases=$4;
+          my @g1_bases=split //, $g1_bases;
+          my @g2_bases=split //, $g2_bases;
+          my @g3_bases=split //, $g3_bases;
+          for my $one_base(@g1_bases){
+            for my $two_base(@g2_bases){
+              for my $three_base(@g3_bases){
+                $string=$breast_bases.$one_base.$two_base.$three_base.$back_bases;
+                my $loc_in_array;
+                $loc_in_array=index($seq_for_search,$string);
+                unless($loc_in_array==-1){
+                  push @enzyme_locs, $loc_in_array;
+                }
+                while($loc_in_array!=-1){
+                  $loc_in_array=index($seq_for_search, $string, $loc_in_array+1);
+                  unless($loc_in_array==-1){
+                    push @enzyme_locs, $loc_in_array;
+                  }
+                }
+              }
+            }
+          }
+        }
+        elsif($string=~/(\w+)\[(\w+)\]\[(\w+)\](\w+)/){
+          my $breast_bases=$1;
+          my $g1_bases=$2;
+          my $g2_bases=$3;
+          my $back_bases=$4;
+          my @g1_bases=split //, $g1_bases;
+          my @g2_bases=split //, $g2_bases;
+          for my $one_base(@g1_bases){
+            for my $two_base(@g2_bases){
+              $string=$breast_bases.$one_base.$two_base.$back_bases;
+              my $loc_in_array;
+              $loc_in_array=index($seq_for_search,$string);
+              unless($loc_in_array==-1){
+                push @enzyme_locs, $loc_in_array;
+              }
+              while($loc_in_array!=-1){
+                $loc_in_array=index($seq_for_search, $string, $loc_in_array+1);
+                unless($loc_in_array==-1){
+                  push @enzyme_locs, $loc_in_array;
+                }
+              }
+            }
+          }
+        }
+        
+        $total_enzyme_loci+=@enzyme_locs;
+        # Sort the array.
+        @enzyme_locs=sort {$a<=>$b} @enzyme_locs;  
+
+        # Produce the fragments' loc-pair.
+        my @fragments_loc_pair;
+        my ($front_rec_loc, $behind_rec_loc)=qw(0 0);
+        if(@enzyme_locs) {
+          while(@enzyme_locs){
+            $behind_rec_loc=shift @enzyme_locs;
+            # Push the front end loc;
+            if($front_rec_loc==0){
+              push @fragments_loc_pair, $front_rec_loc;
+            }
+            else{
+              push @fragments_loc_pair, $front_rec_loc+$enzyme_cut_loc-1;
+            }
+            # Push the behind end loc;
+            push @fragments_loc_pair, $behind_rec_loc+$enzyme_cut_loc-2;
+            
+            # Check whether the @enzyme_locs is empty.
+            if(@enzyme_locs){
+              $front_rec_loc=$behind_rec_loc;
+            }
+            else{
+              push @fragments_loc_pair, $behind_rec_loc+$enzyme_cut_loc-1;
+              push @fragments_loc_pair, $length_of_scafd-1;
+            }
+          }
+        }
+
+        # Output the fragments' locs of this scaffold.        
+        
+        # Define the scalars which contains the length of fragments;
+        my $nums_of_fragments=@fragments_loc_pair/2;
+        my $length_of_fragments=0;
+        my $length_of_fragments_in_range=0;
+        my $count_all=0;
+        my $count_in_range=0;
+        my ($before_cut_coorr,$after_cut_coorr,$bf_ct_crr_hm_rd,$af_ct_crr_hm_rd);
+
+
+        # Attentions here!!! the output sequences of fragments are in accordance with the results of illumian sequencing.
+        # For removing the sequencing primers, read1 and read2 can align with the fragments here directly!!! 
+        # That is to say, fragments here contain the restriction overhangs!!!
+          
+        while(@fragments_loc_pair){
+          $count_all++;
+          my $front_end_loc=shift @fragments_loc_pair;
+          my $behind_end_loc=shift @fragments_loc_pair;
+          my $length_of_fragment=$behind_end_loc-$front_end_loc+1;
+          my $seq_selected=substr($scaffold_seq, $front_end_loc, $length_of_fragment);         
+              
+          # Output the sequence and fragment positions of all-fragments to files;
+       
+          my $front_loc_on_scaffold=$front_end_loc+1;
+          my $behind_loc_on_scaffold=$behind_end_loc+1;
+        
+          push @lengths_of_fragments, $length_of_fragment;
+                    
+          # We treat the fragments in range in the same way of all fragments as above;
+          if($length_of_fragment>=$range1){
+            if($length_of_fragment<=$range2){
+              $count_in_range++;
+              push @lengths_fragments_in_range,$length_of_fragment;
+              $length_of_fragments_in_range+=$length_of_fragment;
+            }
+          }
+          
+          # Count all fragments length no matter in range or not!
+          $length_of_fragments+=$length_of_fragment;
+        }
+        my $reduced_rate=$length_of_fragments/$length_of_scafd;
+        my $fragment_in_range_rate_scafd=$length_of_fragments_in_range/$length_of_scafd;
+        $overall_fragments_length+=$length_of_fragments;
+        $overall_fragments_in_range_length+=$length_of_fragments_in_range;
+        $overall_length_of_scfd+=$length_of_scafd;
+      }
+      $seq_name_tmp=$seq_name;
+      $seq_tmp="";
+    }
+
+    else{
+      $seq_tmp=$seq_tmp.$line;
+    }
+    
+    if( eof($ref_fh) ) {
+      $scaffold_name=$seq_name_tmp;
+      $scaffold_seq=$seq_tmp;
+      my $length_of_scafd=length $scaffold_seq;
+      # Set the array which contains cut locations of the enzyme.
+      my @enzyme_locs=();
+
+      # Find locs of recognition of the enzyme in this scaffold;the locs are meaningful in this array; not in the human context; 
+      
+      my $seq_for_search=$scaffold_seq;
+      my $string=$seq_string_enzyme;
+
+      # Find the recognition sites of this enzyme in this scaffold.
+
+      if($string=~/^(\w+)$/){
+        my $loc_in_array;
+        $loc_in_array=index($seq_for_search,$string);
+        unless($loc_in_array==-1){
+          push @enzyme_locs, $loc_in_array;
+        }
+        while($loc_in_array!=-1){
+          $loc_in_array=index($seq_for_search, $string, $loc_in_array+1);
+          unless($loc_in_array==-1){
+            push @enzyme_locs, $loc_in_array;
+          }
+        }
+      }
+      elsif($string=~/(\w+)\[(\w+)\](\w+)/){
+        my $breast_bases=$1;
+        my $back_bases=$3;
+        my $generate_bases=$2;
+        my @generate_bases=split //, $generate_bases;
+        my $seq_for_search=$scaffold_seq;
+        for my $one_base(@generate_bases){
+          $string=$breast_bases.$one_base.$back_bases;
+          my $loc_in_array;
+          $loc_in_array=index($seq_for_search,$string);
+          unless($loc_in_array==-1){
+            push @enzyme_locs, $loc_in_array;
+          }
+          while($loc_in_array!=-1){
+            $loc_in_array=index($seq_for_search, $string, $loc_in_array+1);
+            unless($loc_in_array==-1){
+               push @enzyme_locs, $loc_in_array;
+            }
+          }
+        }
+      }
+      elsif($string=~/^\[(\w+)\](\w+)\[(\w+)\]$/){
+        my $g1_bases=$1;
+        my $middle=$2;
+        my $g2_bases=$3;
+        my @g1_bases=split //, $g1_bases;
+        my @g2_bases=split //, $g2_bases;
+        for my $one_base(@g1_bases){
+          for my $two_base(@g2_bases){
+            $string=$one_base.$middle.$two_base;
+            my $loc_in_array;
+            $loc_in_array=index($seq_for_search,$string);
+            unless($loc_in_array==-1){
+              push @enzyme_locs, $loc_in_array;
+            }
+            while($loc_in_array!=-1){
+              $loc_in_array=index($seq_for_search, $string, $loc_in_array+1);
+              unless($loc_in_array==-1){
+                push @enzyme_locs, $loc_in_array;
+              }
+            }                
+          }
+        }
+      }
+      elsif($string=~/(\w+)\[(\w+)\](\w+)\[(\w+)\](\w+)/){
+        my $breast_bases=$1;
+        my $g1_bases=$2;
+        my $middle=$3;
+        my $back_bases=$5;
+        my $g2_bases=$4;
+        my @g1_bases=split //, $g1_bases;
+        my @g2_bases=split //, $g2_bases;
+        for my $one_base(@g1_bases){
+          for my $two_base(@g2_bases){
+            $string=$breast_bases.$one_base.$middle.$two_base.$back_bases;
+            my $loc_in_array;
+            $loc_in_array=index($seq_for_search,$string);
+            unless($loc_in_array==-1){
+              push @enzyme_locs, $loc_in_array;
+            }
+            while($loc_in_array!=-1){
+              $loc_in_array=index($seq_for_search, $string, $loc_in_array+1);
+              unless($loc_in_array==-1){
+                push @enzyme_locs, $loc_in_array;
+              }
+            }
+          }
+        }
+      }
+      elsif($string=~/(\w+)\[(\w+)\]\[(\w+)\]\[(\w+)\](\w+)/){
+        my $breast_bases=$1;
+        my $g1_bases=$2;
+        my $g2_bases=$3;
+        my $back_bases=$5;
+        my $g3_bases=$4;
+        my @g1_bases=split //, $g1_bases;
+        my @g2_bases=split //, $g2_bases;
+        my @g3_bases=split //, $g3_bases;
+        for my $one_base(@g1_bases){
+          for my $two_base(@g2_bases){
+            for my $three_base(@g3_bases){
+              $string=$breast_bases.$one_base.$two_base.$three_base.$back_bases;
+              my $loc_in_array;
+              $loc_in_array=index($seq_for_search,$string);
+              unless($loc_in_array==-1){
+                push @enzyme_locs, $loc_in_array;
+              }
+              while($loc_in_array!=-1){
+                $loc_in_array=index($seq_for_search, $string, $loc_in_array+1);
+                unless($loc_in_array==-1){
+                  push @enzyme_locs, $loc_in_array;
+                }
+              }
+            }
+          }
+        }
+      }
+      elsif($string=~/(\w+)\[(\w+)\]\[(\w+)\](\w+)/){
+        my $breast_bases=$1;
+        my $g1_bases=$2;
+        my $g2_bases=$3;
+        my $back_bases=$4;
+        my @g1_bases=split //, $g1_bases;
+        my @g2_bases=split //, $g2_bases;
+        for my $one_base(@g1_bases){
+          for my $two_base(@g2_bases){
+            $string=$breast_bases.$one_base.$two_base.$back_bases;
+            my $loc_in_array;
+            $loc_in_array=index($seq_for_search,$string);
+            unless($loc_in_array==-1){
+              push @enzyme_locs, $loc_in_array;
+            }
+            while($loc_in_array!=-1){
+              $loc_in_array=index($seq_for_search, $string, $loc_in_array+1);
+              unless($loc_in_array==-1){
+                push @enzyme_locs, $loc_in_array;
+              }
+            }
+          }
+        }
+      } 
+      $total_enzyme_loci+= @enzyme_locs; 
+      # Sort the array.
+      @enzyme_locs=sort {$a<=>$b} @enzyme_locs;  
+      # Produce the fragments' loc-pair.
+      my @fragments_loc_pair;
+      my ($front_rec_loc, $behind_rec_loc)=qw(0 0);
+      if(@enzyme_locs) {
+        while(@enzyme_locs){
+          $behind_rec_loc=shift @enzyme_locs;
+          # Push the front end loc;
+          if($front_rec_loc==0){
+            push @fragments_loc_pair, $front_rec_loc;
+          }
+          else{
+            push @fragments_loc_pair, $front_rec_loc+$enzyme_cut_loc-1;
+          }
+          # Push the behind end loc;
+          push @fragments_loc_pair, $behind_rec_loc+$enzyme_cut_loc-2;
+            
+          # Check whether the @enzyme_locs is empty.
+          if(@enzyme_locs){
+            $front_rec_loc=$behind_rec_loc;
+          }
+          else{
+            push @fragments_loc_pair, $behind_rec_loc+$enzyme_cut_loc-1;
+            push @fragments_loc_pair, $length_of_scafd-1;
+          }
+        }
+      }
+      # Define the scalars which contains the length of fragments;
+      my $nums_of_fragments=@fragments_loc_pair/2;
+      my $length_of_fragments=0;
+      my $length_of_fragments_in_range=0;
+      my $count_all=0;
+      my $count_in_range=0;
+      my ($before_cut_coorr,$after_cut_coorr,$bf_ct_crr_hm_rd,$af_ct_crr_hm_rd);
+      # Attentions here!!! the output sequences of fragments are in accordance with the results of illumian sequencing.
+      # For removing the sequencing primers, read1 and read2 can align with the fragments here directly!!! 
+      # That is to say, fragments here contain the restriction overhangs!!! 
+      while(@fragments_loc_pair){
+        $count_all++;
+        my $front_end_loc=shift @fragments_loc_pair;
+        my $behind_end_loc=shift @fragments_loc_pair;
+        my $length_of_fragment=$behind_end_loc-$front_end_loc+1;
+        my $seq_selected=substr($scaffold_seq, $front_end_loc, $length_of_fragment);              
+        # Output the sequence and fragment positions of all-fragments to files;
+        my $front_loc_on_scaffold=$front_end_loc+1;
+        my $behind_loc_on_scaffold=$behind_end_loc+1;
+        push @lengths_of_fragments, $length_of_fragment;          
+        # We treat the fragments in range in the same way of all fragments as above;
+        if($length_of_fragment>=$range1){
+          if($length_of_fragment<=$range2){
+            $count_in_range++;
+            push @lengths_fragments_in_range,$length_of_fragment;
+            $length_of_fragments_in_range+=$length_of_fragment;
+          }
+        }
+      }
+      
+    }
+  }
+  print "Done!\n";
+  return ($total_enzyme_loci, \@lengths_of_fragments);
+}
 
 
 =head1 AUTHOR
@@ -4267,8 +7596,6 @@ Jinpeng Wang, Li Li, Guofan Zhang, C<< <RestrictionDigest at 163.com> >>
 Please report any bugs or feature requests to C<bug-RestrictionDigest at rt.cpan.org>, or through
 the web interface at L<http://rt.cpan.org/NoAuth/ReportBug.html?Queue=RestrictionDigest>.  I will be notified, and then you'll
 automatically be notified of progress on your bug as I make changes.
-
-
 
 
 =head1 SUPPORT
@@ -4348,4 +7675,3 @@ EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 =cut
 
 1; # End of RestrictionDigest
-
