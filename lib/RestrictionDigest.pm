@@ -82,7 +82,7 @@ RestrictionDigest::SingleItem::Double is used for the simulation of double-enzym
 
     $digest->add_GFF(-gff=>'full path to the GFF file');
 
-    $digest->frags_in_range_coverage_ratio();
+    $digest->frags_in_range_coverage();
 
 
 =cut
@@ -428,7 +428,7 @@ sub double_digest {
   my $loc_BB_in_range_file_fh=IO::File->new(">>$output_dir/position_BB_frags_in_range_${name_reference}_by_${front_enzyme}_and_${later_enzyme}");
 
   
-  my $reduced_ratio_every_chromosome_file_fh=IO::File->new(">>$output_dir/coverage_ratio_every_chromosome_${name_reference}_by_${front_enzyme}_and_${later_enzyme}");
+  my $reduced_ratio_every_chromosome_file_fh=IO::File->new(">>$output_dir/coverage_every_chromosome_${name_reference}_by_${front_enzyme}_and_${later_enzyme}");
   $reduced_ratio_every_chromosome_file_fh->print("chromosome_name\tall_type_overall_rate\tall_type_in_range_rate\t");
   $reduced_ratio_every_chromosome_file_fh->print("FB_BF_overall_rate\tFB_BF_in_range_rate\tFF_overall_rate\tFF_in_range_rate\tBB_overall_rate\tBB_in_range_rate\n");
   my $summary_digestion_fh=IO::File->new(">>$output_dir/digestion_summary_${name_reference}_by_${front_enzyme}_and_${later_enzyme}");
@@ -2312,14 +2312,14 @@ sub add_gff {
   }
 }
 
-=head2 all_frags_coverage_ratio
+=head2 all_frags_coverage
 
-     $digest->all_frags_coverage_ratio();
-          Calculate the coverage ratio of different genome structures covered by all restriction fragments.
+     $digest->all_frags_coverage();
+          Calculate the coverage of all restriction fragments on different genome regions.
 
 =cut
 
-sub all_frags_coverage_ratio {
+sub all_frags_coverage {
   my $self=shift;
   
   my $ref=$self->{ref};
@@ -2339,14 +2339,14 @@ sub all_frags_coverage_ratio {
   $self->genome_structure_coverage_ratio($BB_loc_all_frags);
 }
 
-=head2 frags_in_range_coverage_ratio
+=head2 frags_in_range_coverage
 
-     $digest->frags_in_range_coverage_ratio();
-      Calculate the coverage ratio of different genome structures covered by restriction fragments in range.
+     $digest->frags_in_range_coverage();
+      Calculate the coverage of restriction fragments on different genome regions.
  
 =cut
 
-sub frags_in_range_coverage_ratio {
+sub frags_in_range_coverage {
   my $self=shift;
   
   my $ref=$self->{ref};
@@ -2362,20 +2362,20 @@ sub frags_in_range_coverage_ratio {
   my $FF_loc_frags_in_range="$output_dir/position_FF_frags_in_range_${basename_ref}_by_${e1}_and_${e2}";
   my $BB_loc_frags_in_range="$output_dir/position_BB_frags_in_range_${basename_ref}_by_${e1}_and_${e2}";
 
-  $self->genome_structure_coverage_ratio($FB_BF_loc_frags_in_range);
-  $self->genome_structure_coverage_ratio($FF_loc_frags_in_range);
-  $self->genome_structure_coverage_ratio($BB_loc_frags_in_range);
+  $self->genome_structure_coverage($FB_BF_loc_frags_in_range);
+  $self->genome_structure_coverage($FF_loc_frags_in_range);
+  $self->genome_structure_coverage($BB_loc_frags_in_range);
 }
 
-=head2  genome_structure_coverage_ratio
+=head2  genome_structure_coverage
 
-        A subroutine invoked by the 'all_frags_coverage_ratio' and the 'frags_in_range_coverage_ratio' methods. 
+        A subroutine invoked by the 'all_frags_coverage' and the 'frags_in_range_coverage' methods. 
         User do not use this subroutine.
 
 =cut
 
  
-sub genome_structure_coverage_ratio {
+sub genome_structure_coverage {
   my $self=shift;
   my $loc_frags_file=shift;
 
@@ -2400,31 +2400,31 @@ sub genome_structure_coverage_ratio {
     die"No GFF file provided! Please perldoc RestrictionDigest for example.\n";
   }
   
-  # Make  output filehandles to generic region and intergenic region coverage ratio files. 
+  # Make  output filehandles to generic region and intergenic region coverage  files. 
   my $coverage_ratio_fh;
   
   my $basename_loc_frags_file=basename($loc_frags_file);
 
   if($basename_loc_frags_file =~/frags_in_range/){
     if($basename_loc_frags_file=~/^position_FB_BF_frags_in_range/){
-      $coverage_ratio_fh=IO::File->new(">>$output_dir/genome_coverage_by_FB_BF_frags_in_range_${basename_ref}_by_${e1}_and_${e2}");
+      $coverage_ratio_fh=IO::File->new(">>$output_dir/genome_coverage_of_FB_BF_frags_in_range_${basename_ref}_by_${e1}_and_${e2}");
     }
     elsif($basename_loc_frags_file=~/^position_FF_frags_in_range/){
-      $coverage_ratio_fh=IO::File->new(">>$output_dir/genome_coverage_by_FF_frags_in_range_${basename_ref}_by_${e1}_and_${e2}");
+      $coverage_ratio_fh=IO::File->new(">>$output_dir/genome_coverage_of_FF_frags_in_range_${basename_ref}_by_${e1}_and_${e2}");
     }
     elsif($basename_loc_frags_file=~/^position_BB_frags_in_range/){
-      $coverage_ratio_fh=IO::File->new(">>$output_dir/genome_coverage_by_BB_frags_in_range_${basename_ref}_by_${e1}_and_${e2}");
+      $coverage_ratio_fh=IO::File->new(">>$output_dir/genome_coverage_of_BB_frags_in_range_${basename_ref}_by_${e1}_and_${e2}");
     }
   }
   else{
     if($basename_loc_frags_file=~/^position_FB_BF_frags/){
-      $coverage_ratio_fh=IO::File->new(">>$output_dir/genome_coverage_by_FB_BF_frags_${basename_ref}_by_${e1}_and_${e2}");
+      $coverage_ratio_fh=IO::File->new(">>$output_dir/genome_coverage_of_FB_BF_frags_${basename_ref}_by_${e1}_and_${e2}");
     }
     elsif($basename_loc_frags_file=~/^position_FF_frags/){
-      $coverage_ratio_fh=IO::File->new(">>$output_dir/genome_coverage_by_FF_frags_${basename_ref}_by_${e1}_and_${e2}");
+      $coverage_ratio_fh=IO::File->new(">>$output_dir/genome_coverage_of_FF_frags_${basename_ref}_by_${e1}_and_${e2}");
     }
     elsif($basename_loc_frags_file=~/^position_BB_frags/){
-      $coverage_ratio_fh=IO::File->new(">>$output_dir/genome_coverage_by_BB_frags_${basename_ref}_by_${e1}_and_${e2}");
+      $coverage_ratio_fh=IO::File->new(">>$output_dir/genome_coverage_of_BB_frags_${basename_ref}_by_${e1}_and_${e2}");
     }
   }
 
@@ -2508,7 +2508,7 @@ sub genome_structure_coverage_ratio {
         $scfd_seq=$seq_tmp;
       
         my $scaffold_length=length $scfd_seq;
-        print "CoverageRatio: Processing $scfd_name...\t";
+        print "Coverage: Processing $scfd_name...\t";
 
 
         # Calculate the lengths of different parts of this scaffold.
@@ -2732,7 +2732,7 @@ sub genome_structure_coverage_ratio {
       $scfd_name=$seq_name_tmp;
       $scfd_seq=$seq_tmp;
       my $scaffold_length=length $scfd_seq;
-      print "CoverageRatio: Processing $scfd_name...\t";
+      print "Coverage: Processing $scfd_name...\t";
 
 
       # Calculate the lengths of different parts of this scaffold.
@@ -2962,7 +2962,7 @@ sub genome_structure_coverage_ratio {
   else{
   $all_intergenic_map_ratio=$all_intergenic_map_length/$all_intergenic_length;}
   
-  $coverage_ratio_fh->print("Intergenic region coverage ratio is\t$all_intergenic_map_ratio\nGenes region coverage ratio is\t$all_gene_map_ratio\nExon region coverage ratio is\t$all_exon_map_ratio\nIntron region coverage ratio is\t$all_intron_map_ratio\n");
+  $coverage_ratio_fh->print("Intergenic region coverage is\t$all_intergenic_map_ratio\nGenes region coverage is\t$all_gene_map_ratio\nExon region coverage  is\t$all_exon_map_ratio\nIntron region coverage is\t$all_intron_map_ratio\n");
 }
 
 
@@ -3018,7 +3018,7 @@ RestrictionDigest::SingleItem::Single is used for the simulation of single-enzym
 
     $digest->add_GFF(-gff=>'full path to the GFF file');
 
-    $digest->frags_in_range_coverage_ratio();
+    $digest->frags_in_range_coverage();
 
 
 =cut
@@ -3320,7 +3320,7 @@ sub single_digest {
   my $all_loc_file_fh=IO::File->new(">>$output_dir/position_frags_${name_reference}_by_${enzyme}");
   my $seq_in_range_file_fh=IO::File->new(">>$output_dir/seq_frags_in_range_${name_reference}_by_${enzyme}");
   my $loc_in_range_file_fh=IO::File->new(">>$output_dir/position_frags_in_range_${name_reference}_by_${enzyme}");
-  my $reduced_ratio_every_scaffold_file_fh=IO::File->new(">>$output_dir/coverage_ratio_every_chromosome_${name_reference}_by_${enzyme}");
+  my $reduced_ratio_every_scaffold_file_fh=IO::File->new(">>$output_dir/coverage_every_chromosome_${name_reference}_by_${enzyme}");
   my $summary_digestion_fh=IO::File->new(">>$output_dir/digestion_summary_${name_reference}_by_${enzyme}");
   $reduced_ratio_every_scaffold_file_fh->print("chromosome_name\toverall_rate\tin_range_rate\n");
 
@@ -4229,14 +4229,14 @@ sub add_gff {
   }
 }
 
-=head2 all_frags_coverage_ratio
+=head2 all_frags_coverage
 
-     $digest->all_frags_coverage_ratio();
-       Calculate the coverage ratio of different genome structures covered by all restriction fragments.
+     $digest->all_frags_coverage();
+       Calculate the coverage of all restriction fragments on different genome regions.
    
 =cut
 
-sub all_frags_coverage_ratio {
+sub all_frags_coverage {
   my $self=shift;
   
   my $ref=$self->{ref};
@@ -4249,16 +4249,16 @@ sub all_frags_coverage_ratio {
 
   my $loc_file_all_frags="$output_dir/position_frags_${basename_ref}_by_${enzyme}";
 
-  $self->genome_structure_coverage_ratio($loc_file_all_frags);
+  $self->genome_structure_coverage($loc_file_all_frags);
 }
 
-=head2 frags_in_range_coverage_ratio
+=head2 frags_in_range_coverage
 
-     $digest->frags_in_range_coverage_ratio();
-      Calculate the coverage ratio of different genome structures covered by restriction fragments in range.
+     $digest->frags_in_range_coverage();
+      Calculate the coverage of restriction fragments in range on different genome regions.
 =cut
 
-sub frags_in_range_coverage_ratio {
+sub frags_in_range_coverage {
   my $self=shift;
   
   my $ref=$self->{ref};
@@ -4271,18 +4271,18 @@ sub frags_in_range_coverage_ratio {
 
   my $loc_file_all_frags="$output_dir/position_frags_in_range_${basename_ref}_by_${enzyme}";
 
-  $self->genome_structure_coverage_ratio($loc_file_all_frags);
+  $self->genome_structure_coverage($loc_file_all_frags);
 }
 
-=head2  genome_structure_coverage_ratio
+=head2  genome_structure_coverage
 
-        A subroutine invoked by the 'all_frags_coverage_ratio' and the 'frags_in_range_coverage_ratio' methods. 
+        A subroutine invoked by the 'all_frags_coverage' and the 'frags_in_range_coverage' methods. 
         User do not use this subroutine.
 
 =cut
 
  
-sub genome_structure_coverage_ratio {
+sub genome_structure_coverage {
   my $self=shift;
   my $loc_frags_file=shift;
 
@@ -4307,16 +4307,16 @@ sub genome_structure_coverage_ratio {
   }
 
    
-  # Make  output filehandles to generic region and intergenic region coverage ratio files. 
+  # Make  output filehandles to generic region and intergenic region coverage files. 
   my $coverage_ratio_fh;
   
   my $basename_loc_frags_file=basename($loc_frags_file);
 
   if($basename_loc_frags_file =~/in_range/){
-    $coverage_ratio_fh=IO::File->new(">>$output_dir/genome_coverage_ratio_in_range_${basename_ref}_by_${enzyme}");
+    $coverage_ratio_fh=IO::File->new(">>$output_dir/genome_coverage_in_range_${basename_ref}_by_${enzyme}");
   }
   else{
-    $coverage_ratio_fh=IO::File->new(">>$output_dir/genome_coverage_ratio_${basename_ref}_by_${enzyme}");
+    $coverage_ratio_fh=IO::File->new(">>$output_dir/genome_coverage_${basename_ref}_by_${enzyme}");
   }
 
   $coverage_ratio_fh->print("ScaffoldName\tIntergenicLength\tIntergenicMapLength\tIntergenicMapRatio\tGenesLength\tGenesMapLength\tGenesMapRatio\tExonsLength\tExonsMapLength\tExonsMapRatio\tIntronsLength\tIntronsMapLength\tIntronsMapRatio\n");
@@ -4397,7 +4397,7 @@ sub genome_structure_coverage_ratio {
         $scfd_seq=$seq_tmp;
         
       my $scaffold_length=length $scfd_seq;
-      print "CoverageRatio: Processing $scfd_name...\t";
+      print "Coverage: Processing $scfd_name...\t";
 
 
       # Calculate the lengths of different parts of this scaffold.
@@ -4624,7 +4624,7 @@ sub genome_structure_coverage_ratio {
       $scfd_seq=$seq_tmp;
       
       my $scaffold_length=length $scfd_seq;
-      print "CoverageRatio: Processing $scfd_name...\t";
+      print "Coverage: Processing $scfd_name...\t";
 
 
       # Calculate the lengths of different parts of this scaffold.
@@ -4855,7 +4855,7 @@ sub genome_structure_coverage_ratio {
   else{
   $all_intergenic_map_ratio=$all_intergenic_map_length/$all_intergenic_length;}
   
-  $coverage_ratio_fh->print("Intergenic region coverage ratio is\t$all_intergenic_map_ratio\nGenes region coverage ratio is\t$all_gene_map_ratio\nExon region coverage ratio is\t$all_exon_map_ratio\nIntron region coverage ratio is\t$all_intron_map_ratio\n");
+  $coverage_ratio_fh->print("Intergenic region coverage is\t$all_intergenic_map_ratio\nGenes region coverage is\t$all_gene_map_ratio\nExon region coverage is\t$all_exon_map_ratio\nIntron region coverage is\t$all_intron_map_ratio\n");
 }
 
 
