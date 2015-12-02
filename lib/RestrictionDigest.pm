@@ -80,7 +80,7 @@ RestrictionDigest::SingleItem::Double is used for the simulation of double-enzym
 
     $digest->count_SNPs_at_fragments(-sequence_type=>'125SE', -sequence_end=>'front_enzyme');
 
-    $digest->add_GFF(-gff=>'full path to the GFF file');
+    $digest->add_gff(-gff=>'full path to the GFF file');
 
     $digest->frags_in_range_coverage();
 
@@ -3016,7 +3016,7 @@ RestrictionDigest::SingleItem::Single is used for the simulation of single-enzym
 
     $digest->count_SNPs_at_fragments(-sequence_type=>'125SE', -sequence_end=>'front_enzyme');
 
-    $digest->add_GFF(-gff=>'full path to the GFF file');
+    $digest->add_gff(-gff=>'full path to the GFF file');
 
     $digest->frags_in_range_coverage();
 
