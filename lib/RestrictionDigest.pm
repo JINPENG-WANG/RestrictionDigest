@@ -3027,7 +3027,11 @@ RestrictionDigest::SingleItem::Single is used for the simulation of single-enzym
 
     $digest->count_SNPs_at_fragments(-sequence_type=>'125SE', -sequence_end=>'front_enzyme');
 
+<<<<<<< HEAD
     $digest->add_gff(-gff=>'full path to the gff file');
+=======
+    $digest->add_gff(-gff=>'full path to the GFF file');
+>>>>>>> origin/master
 
     $digest->frags_in_range_coverage();
 
