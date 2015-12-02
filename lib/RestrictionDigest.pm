@@ -80,7 +80,7 @@ RestrictionDigest::SingleItem::Double is used for the simulation of double-enzym
 
     $digest->count_SNPs_at_fragments(-sequence_type=>'125SE', -sequence_end=>'front_enzyme');
 
-    $digest->add_GFF(-gff=>'full path to the GFF file');
+    $digest->add_gff(-gff=>'full path to the GFF file');
 
     $digest->frags_in_range_coverage();
 
@@ -2962,7 +2962,18 @@ sub genome_structure_coverage {
   else{
   $all_intergenic_map_ratio=$all_intergenic_map_length/$all_intergenic_length;}
   
+  my $all_map_length=$all_gene_map_length+$all_intergenic_map_length;
+  my $frag_length_on_intergenic_rate=$all_intergenic_map_length/$all_map_length;
+  my $frag_length_on_gene_rate=$all_gene_map_length/$all_map_length;
+  my $frag_length_on_exon_rate=$all_exon_map_length/$all_map_length;
+  my $frag_length_on_intron_rate=$all_intron_map_length/$all_map_length;
+
   $coverage_ratio_fh->print("Intergenic region coverage is\t$all_intergenic_map_ratio\nGenes region coverage is\t$all_gene_map_ratio\nExon region coverage  is\t$all_exon_map_ratio\nIntron region coverage is\t$all_intron_map_ratio\n");
+  $coverage_ratio_fh->print("Total length of fragments:\t$all_map_length\n");
+  $coverage_ratio_fh->print("Total bases mapped on intergenic regions:\t$all_intergenic_map_length\tLength rate on all fragments bases:\t$frag_length_on_intergenic_rate\n");
+  $coverage_ratio_fh->print("Total bases mapped on gene regions:\t$all_gene_map_length\tLength rate on all fragments bases:\t$frag_length_on_gene_rate\n");
+  $coverage_ratio_fh->print("Total bases mapped on exon regions:\t$all_exon_map_length\tLength rate on all fragments bases:\t$frag_length_on_exon_rate\n");
+  $coverage_ratio_fh->print("Total bases mapped on intron regions:\t$all_intron_map_length\tLength rate on all fragments bases:\t$frag_length_on_intron_rate\n");
 }
 
 
@@ -3016,7 +3027,7 @@ RestrictionDigest::SingleItem::Single is used for the simulation of single-enzym
 
     $digest->count_SNPs_at_fragments(-sequence_type=>'125SE', -sequence_end=>'front_enzyme');
 
-    $digest->add_GFF(-gff=>'full path to the GFF file');
+    $digest->add_gff(-gff=>'full path to the gff file');
 
     $digest->frags_in_range_coverage();
 
@@ -4855,8 +4866,20 @@ sub genome_structure_coverage {
   else{
   $all_intergenic_map_ratio=$all_intergenic_map_length/$all_intergenic_length;}
   
-  $coverage_ratio_fh->print("Intergenic region coverage is\t$all_intergenic_map_ratio\nGenes region coverage is\t$all_gene_map_ratio\nExon region coverage is\t$all_exon_map_ratio\nIntron region coverage is\t$all_intron_map_ratio\n");
-}
+  my $all_map_length=$all_gene_map_length+$all_intergenic_map_length;
+  my $frag_length_on_intergenic_rate=$all_intergenic_map_length/$all_map_length;
+  my $frag_length_on_gene_rate=$all_gene_map_length/$all_map_length;
+  my $frag_length_on_exon_rate=$all_exon_map_length/$all_map_length;
+  my $frag_length_on_intron_rate=$all_intron_map_length/$all_map_length;
+
+  $coverage_ratio_fh->print("Intergenic region coverage is\t$all_intergenic_map_ratio\nGenes region coverage is\t$all_gene_map_ratio\nExon region coverage  is\t$all_exon_map_ratio\nIntron region coverage is\t$all_intron_map_ratio\n");
+  $coverage_ratio_fh->print("Total length of fragments:\t$all_map_length\n");
+  $coverage_ratio_fh->print("Total bases mapped on intergenic regions:\t$all_intergenic_map_length\tLength rate on all fragments bases:\t$frag_length_on_intergenic_rate\n");
+  $coverage_ratio_fh->print("Total bases mapped on gene regions:\t$all_gene_map_length\tLength rate on all fragments bases:\t$frag_length_on_gene_rate\n");
+  $coverage_ratio_fh->print("Total bases mapped on exon regions:\t$all_exon_map_length\tLength rate on all fragments bases:\t$frag_length_on_exon_rate\n");
+  $coverage_ratio_fh->print("Total bases mapped on intron regions:\t$all_intron_map_length\tLength rate on all fragments bases:\t$frag_length_on_intron_rate\n");
+
+  }
 
 
 
