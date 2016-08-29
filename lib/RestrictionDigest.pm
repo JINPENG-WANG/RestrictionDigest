@@ -3554,6 +3554,30 @@ sub single_digest {
             }
           }
         
+        elsif($enzyme_seq=~/CCNNNNNNN/i){
+			  my $loc_in_array;
+			  $loc_in_array=index($seq_for_search,'CC');
+			  unless($loc_in_array==-1){
+				  my $seq_after_CC=substr($seq_for_search,$loc_in_array);
+				  if(length $seq_after_CC >19){
+					push @enzyme_locs, $loc_in_array;
+				  }
+			  }
+			  while($loc_in_array!=-1){
+				  $loc_in_array=index($seq_for_search, 'CC', $loc_in_array+1);
+				  unless($loc_in_array==-1){
+					  my $previous_loc=$enzyme_locs[$#enzyme_locs];
+					  if(($loc_in_array- $previous_loc) > 13){
+						  my $seq_after_CC=substr($seq_for_search,$loc_in_array);
+				          if(length $seq_after_CC >19){
+							  push @enzyme_locs, $loc_in_array;
+						  }
+					  }
+				  }
+			  }
+		 }
+        
+        
         # Sort the array.
         $total_enzyme_loci+=@enzyme_locs;
         @enzyme_locs=sort {$a<=>$b} @enzyme_locs;  
@@ -3795,6 +3819,29 @@ sub single_digest {
               }
             }
           }
+        elsif($enzyme_seq=~/CCNNNNNNN/i){
+			  my $loc_in_array;
+			  $loc_in_array=index($seq_for_search,'CC');
+			  unless($loc_in_array==-1){
+				  my $seq_after_CC=substr($seq_for_search,$loc_in_array);
+				  if(length $seq_after_CC >19){
+					push @enzyme_locs, $loc_in_array;
+				  }
+			  }
+			  while($loc_in_array!=-1){
+				  $loc_in_array=index($seq_for_search, 'CC', $loc_in_array+1);
+				  unless($loc_in_array==-1){
+					  my $previous_loc=$enzyme_locs[$#enzyme_locs];
+					  if(($loc_in_array- $previous_loc) > 13){
+						  my $seq_after_CC=substr($seq_for_search,$loc_in_array);
+				          if(length $seq_after_CC >19){
+							  push @enzyme_locs, $loc_in_array;
+						  }
+					  }
+				  }
+			  }
+		 }
+        
         
         # Sort the array.
         $total_enzyme_loci+=@enzyme_locs;
@@ -7313,6 +7360,28 @@ sub multiple_genomes_single_digest {
             }
           }
         }
+        elsif($enzyme_seq=~/CCNNNNNNN/i){
+			  my $loc_in_array;
+			  $loc_in_array=index($seq_for_search,'CC');
+			  unless($loc_in_array==-1){
+				  my $seq_after_CC=substr($seq_for_search,$loc_in_array);
+				  if(length $seq_after_CC >19){
+					push @enzyme_locs, $loc_in_array;
+				  }
+			  }
+			  while($loc_in_array!=-1){
+				  $loc_in_array=index($seq_for_search, 'CC', $loc_in_array+1);
+				  unless($loc_in_array==-1){
+					  my $previous_loc=$enzyme_locs[$#enzyme_locs];
+					  if(($loc_in_array- $previous_loc) > 13){
+						  my $seq_after_CC=substr($seq_for_search,$loc_in_array);
+				          if(length $seq_after_CC >19){
+							  push @enzyme_locs, $loc_in_array;
+						  }
+					  }
+				  }
+			  }
+		 }
         
         $total_enzyme_loci+=@enzyme_locs;
         # Sort the array.
@@ -7548,6 +7617,31 @@ sub multiple_genomes_single_digest {
           }
         }
       } 
+      elsif($enzyme_seq=~/CCNNNNNNN/i){
+			  my $loc_in_array;
+			  $loc_in_array=index($seq_for_search,'CC');
+			  unless($loc_in_array==-1){
+				  my $seq_after_CC=substr($seq_for_search,$loc_in_array);
+				  if(length $seq_after_CC >19){
+					push @enzyme_locs, $loc_in_array;
+				  }
+			  }
+			  while($loc_in_array!=-1){
+				  $loc_in_array=index($seq_for_search, 'CC', $loc_in_array+1);
+				  unless($loc_in_array==-1){
+					  my $previous_loc=$enzyme_locs[$#enzyme_locs];
+					  if(($loc_in_array- $previous_loc) > 13){
+						  my $seq_after_CC=substr($seq_for_search,$loc_in_array);
+				          if(length $seq_after_CC >19){
+							  push @enzyme_locs, $loc_in_array;
+						  }
+					  }
+				  }
+			  }
+		 }
+      
+      
+      
       $total_enzyme_loci+= @enzyme_locs; 
       # Sort the array.
       @enzyme_locs=sort {$a<=>$b} @enzyme_locs;  
