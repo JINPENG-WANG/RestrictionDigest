@@ -5,3 +5,6 @@ Revision history for RestrictionDigest
 
 20150903        Fix a bug. To make it process standard FASTA file correctly. Standard FASTA file contains newline characters within
                 one sequence.
+20160829        Update the RestrictionDigest::SingleItem::Single and RestrictionDigest::MultipleItems::Single to make them support 
+                the digestion with enzyme FspEI whose recognition site is CCNNNNNNNNNNNN|NNNNN. But as the enzyme's recognition site 
+                containes a lot of 'N's, it runs slowly. 
