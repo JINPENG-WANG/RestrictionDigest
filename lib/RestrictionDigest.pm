@@ -546,8 +546,8 @@ sub double_digest {
   while(<$ref_fh>){
     chomp;
     my $line=$_;
-    if($_=~/^>/){
-      my $seq_name=$line;
+    if($_=~/^(>\S+)/){
+      my $seq_name=$1;
       my $seq_name_length=length $seq_name_tmp;
       if($seq_name_length !=0){
         $scaffold_name=$seq_name_tmp;
@@ -2500,7 +2500,7 @@ sub genome_structure_coverage {
   while(<$ref_fh>){
     chomp;
     my $line=$_;
-    if($_=~/^>(.+)/){
+    if($_=~/^>(\S+)/){
       my $seq_name=$1;
       my $seq_name_length=length $seq_name_tmp;
       if($seq_name_length !=0){
