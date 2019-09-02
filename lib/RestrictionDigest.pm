@@ -1533,7 +1533,7 @@ sub double_digest {
   $summary_digestion_fh->print("FF_fragments_in_range_number\tFF_fragments_in_range_coverage\t");
   $summary_digestion_fh->print("BB_fragments_in_range_number\tBB_fragments_in_range_coverage\n");
 
-  $summary_digestion_fh->print("$count_in_range\t$all_type_in_range_coverage\t$count_FB_BF_in_range\t$FB_BF_in_range_coverage");
+  $summary_digestion_fh->print("$count_in_range\t$all_type_in_range_coverage\t$count_FB_BF_in_range\t$FB_BF_in_range_coverage\t");
   $summary_digestion_fh->print("$count_FF_in_range\t$FF_in_range_coverage\t$count_BB_in_range\t$BB_in_range_coverage\n");
 
 
