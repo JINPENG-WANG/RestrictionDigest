@@ -13,8 +13,9 @@ For more information, please see the academic paper about this module which is p
 on  ResearchGate (https://www.researchgate.net/publication/297717326_RestrictionDigest_A_powerful_Perl_module_for_simulating_genomic_restriction_digests) or published online (http://www.sciencedirect.com/science/article/pii/S071734581630001X).
 
 
-# 2022-12-26
-Important updates made to the module!
+### 2022-12-26
+**Important updates made to the module!**
+
 I used the Cartesian product function to get all possible combinations for enzyme cut sites with degenerate bases. This update makes any enzyme can be added to the enzyme pool. The use of the Cartesian production function also simplified the programming sentences.
 
 Another benefit of using the Cartesian production function is the compatability of the enzymes often used in 2b-RAD method, like BsaXI. As BsaXI cuts the DNA sequence at two different sites, users can use two pseudo restriction enzymes to simulate the BsaXI enzyme. Below is an example:
@@ -28,7 +29,7 @@ Another benefit of using the Cartesian production function is the compatability 
 4. we add the two pseudo enzymes to the module and use them to perform double-enzyme digest.
 
 The Perl Script can be written like this:
-
+```
   #!/usr/bin/perl -w 
   use strict; 
   use IO::File; 
@@ -41,5 +42,5 @@ The Perl Script can be written like this:
   $dg->add_enzyme_pair(-front_enzyme=>"BsaXIF",-behind_enzyme=>'BsaXIB'); 
   $dg->add_output_dir(-output_dir=>"output"); 
   $dg->double_digest(); 
-  
+```
 Users should keep in mind that 2b-RAD enzymes can cut DNA sequences into small pieces, the program will need large memory space. So it is best to run it in a computer with large memory space or in a cluster with enough memory. If the memory space is not available, consider to cut chromosomes or scaffolds into smaller ones.
