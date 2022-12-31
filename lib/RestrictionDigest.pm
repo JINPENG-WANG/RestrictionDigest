@@ -13,11 +13,11 @@ RestrictionDigest - A powerful Perl module for simulating genomic restriction di
 
 =head1 VERSION
 
-Version 0.01
+Version 1.01 -- Updated at 2022.12.26 
 
 =cut
 
-our $VERSION = '0.01';
+our $VERSION = '1.01';
 
 =head1 DESCRIPTION
 
