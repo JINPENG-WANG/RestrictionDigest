@@ -1,7 +1,9 @@
 # RestrictionDigest
 A powerful Perl module for simulating the genome digestions
 
-如有使用问题，请联系负责人：王金鹏，博士，副研究员 山东省农业科学院畜牧兽医研究所
+如有使用问题，请联系负责人：
+王金鹏，博士，副研究员 wangjinpeng0225@163.com
+山东省农业科学院畜牧兽医研究所
 研究方向：奶牛基因组选择，重要经济性状关键基因挖掘
 
 DESCRIPTION
